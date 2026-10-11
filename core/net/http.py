@@ -4,8 +4,6 @@ import asyncio
 import random
 import logging
 import math
-import socket
-import ssl
 import time
 from datetime import timezone
 from email.utils import parsedate_to_datetime
@@ -38,45 +36,6 @@ def retry_after_time(value: str | None) -> float | None:
     if not math.isfinite(seconds) or seconds < 0:
         return None
     return time.time() + seconds
-
-
-def describe_transport_error(error: Exception) -> str:
-    """展示网络阶段与已知底层原因；不包含请求正文、URL 路径或凭据。"""
-    # 1. 异常类型说明失败阶段，未发送证据仍由 driver 单独给出。
-    if isinstance(error, httpx.ConnectTimeout):
-        reason = "连接模型服务超时，请检查网络、代理或节点"
-    elif isinstance(error, httpx.ConnectError):
-        reason = "无法连接模型服务，请检查网络、代理或节点"
-    elif isinstance(error, httpx.ReadTimeout):
-        reason = "等待模型服务响应超时"
-    elif isinstance(error, httpx.RemoteProtocolError):
-        reason = "模型服务提前关闭连接或返回了无效 HTTP 响应"
-    elif isinstance(error, httpx.ReadError):
-        reason = "读取模型响应失败，连接已中断"
-    elif isinstance(error, httpx.WriteError):
-        reason = "发送模型请求失败，连接已中断"
-    elif isinstance(error, httpx.WriteTimeout):
-        reason = "向模型服务发送请求超时"
-    elif isinstance(error, httpx.PoolTimeout):
-        reason = "等待可用 HTTP 连接超时"
-    elif isinstance(error, (httpx.TimeoutException, TimeoutError)):
-        reason = "模型请求超时"
-    else:
-        reason = "与模型服务的传输中断"
-    # 2. 只透传系统网络诊断，不直接打印可能含 token 的异常文本。
-    details = [type(error).__name__]
-    cause: BaseException | None = error
-    seen: set[int] = set()
-    while cause is not None and id(cause) not in seen:
-        seen.add(id(cause))
-        if isinstance(cause, ssl.SSLCertVerificationError):
-            details.append(f"TLS 证书校验失败：{cause.verify_message}")
-        elif isinstance(cause, socket.gaierror):
-            details.append(f"DNS 解析失败：{cause.strerror}")
-        elif isinstance(cause, OSError) and cause.strerror:
-            details.append(f"{type(cause).__name__}: {cause.strerror}")
-        cause = cause.__cause__ or cause.__context__
-    return f"{reason}（{'；'.join(dict.fromkeys(details))}）"
 
 
 class HttpClient:
@@ -137,7 +96,7 @@ async def finish_response(lines: AsyncIterator[str]) -> None:
         logger.debug("响应已完成，尾流未结束，关闭连接: %s", type(error).__name__)
 
 
-HttpProfile = Literal["external_default", "feed_fetcher", "local_service"]
+HttpProfile = Literal["external_default", "local_service"]
 
 
 @dataclass(frozen=True)
@@ -328,7 +287,6 @@ class HttpRequester:
 @dataclass
 class SharedHttpResources:
     external_default: HttpRequester = field(init=False)
-    feed_fetcher: HttpRequester = field(init=False)
     local_service: HttpRequester = field(init=False)
     _clients: list[httpx.AsyncClient] = field(
         init=False,
@@ -340,24 +298,15 @@ class SharedHttpResources:
         external_client = httpx.AsyncClient(
             limits=httpx.Limits(max_connections=20, max_keepalive_connections=10)
         )
-        feed_client = httpx.AsyncClient(
-            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5)
-        )
         local_client = httpx.AsyncClient(
             limits=httpx.Limits(max_connections=10, max_keepalive_connections=5)
         )
-        self._clients = [external_client, feed_client, local_client]
+        self._clients = [external_client, local_client]
         self.external_default = HttpRequester(
             client=external_client,
             retry_policy=RetryPolicy(max_attempts=3),
             default_timeout_s=30.0,
             default_budget=RequestBudget(total_timeout_s=45.0),
-        )
-        self.feed_fetcher = HttpRequester(
-            client=feed_client,
-            retry_policy=RetryPolicy(max_attempts=3, base_delay_s=0.2, max_delay_s=0.8),
-            default_timeout_s=15.0,
-            default_budget=RequestBudget(total_timeout_s=20.0),
         )
         self.local_service = HttpRequester(
             client=local_client,

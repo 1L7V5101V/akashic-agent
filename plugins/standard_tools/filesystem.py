@@ -19,9 +19,6 @@ class _FileTool:
     async def execute(self, **arguments: Any) -> FileResult:
         return await self._operation.execute(**arguments)
 
-    async def read_raw(self, **arguments: Any) -> FileResult:
-        return await self._operation.execute(**arguments)
-
     async def aclose(self) -> None:
         await self._operation.aclose()
 

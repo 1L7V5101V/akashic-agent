@@ -6,7 +6,9 @@
 
 | ID | 状态 | 主题 | 关联条款 |
 |---|---|---|---|
-| [0108](0108-bundles-are-composition-inputs.md) | proposed / base artifact implemented, mode activation pending | Bundle 分层整行替换，选择仍唯一 | PLG、RUN、MIG |
+| [0112](0112-akasha-reads-validated-consumption.md) | proposed / implemented for review | Akasha 只读面板沿用消费状态校验 | MEM、STA、ERR |
+| [0111](0111-remove-unconsumed-business-ports.md) | proposed / implemented for review | 删除没有消费者的业务端口 | PLG、STA |
+| [0108](0108-bundles-are-composition-inputs.md) | proposed / implemented for review | Bundle 分层整行替换，选择仍唯一 | PLG、RUN、MIG |
 | [0107](0107-restore-missing-vectors-before-reading-memory.md) | proposed / implemented for review | 按原模型空间补齐丢失的派生向量 | STA、MEM、MIG |
 | [0106](0106-derived-vectors-use-separate-storage.md) | proposed / implemented for review | 派生向量独立存储，复制保留原表 | STA、MIG、MEM |
 | [0105](0105-ledger-owns-business-storage.md) | proposed / implemented for review | Ledger 插件拥有业务持久化与入站交接 | PLG、STA、SES、MIG |
@@ -119,7 +121,7 @@
 
 | [0102](0102-plugin-owned-services-and-public-contracts.md) | accepted target / implementation | 服务与公共合同归提供方，Core 只保留组合与宿主机制 | PLG、CAP、STA |
 
-| [0103](0103-processes-follow-provider-lifetime.md) | accepted | 进程集合随 HostExecution provider 关闭，取消等待保留本代续接 | PLG-017、SH |
+| [0103](0103-processes-follow-provider-lifetime.md) | proposed / implemented for review | 进程集合随 HostExecution provider 关闭，取消等待保留本代续接 | PLG-017、SH |
 
 ## 新增规则
 
@@ -136,3 +138,7 @@
 | [0093](0093-computer-reuses-anonymous-browsers.md) | proposed | 匿名实例稳定 ID、错误保留进度与闲置回收 | PLG-017 |
 
 | [0104](0104-public-codecs-without-ui-runtime.md) | proposed / implemented for review | 公共只读编码与类型同寿命，headless 不要求 UI runtime | PLG、CAP |
+
+| [0109](0109-workspace-owns-plugin-choices.md) | proposed / implemented for review | 启停归 workspace patch，库存取实际制品，配置保留单一 owner | PLG、MIG、STA |
+
+| [0110](0110-ledger-checks-use-existing-message-semantics.md) | proposed / implemented for review | 追加检查复用现有 Turn 与未知效果合同 | PLG、SES、OUT |

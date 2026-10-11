@@ -69,7 +69,12 @@ Ledger 的存储、交接和历史迁移归属见 [0105](decisions/0105-ledger-o
 
 声明式组合输入见 [0108](decisions/0108-bundles-are-composition-inputs.md)。
 
-Issue 1179 的分阶段审查与剩余范围见 [边界①审查入口](design/plugin-core-boundary1-review.md)。
+Core 静态边界与 SQLite/HTTP 例外见 [R7～R11](design/plugin-core-static-boundary.md)。
+
+Issue 1179 的当前实现与重大决定见 [边界②③审查入口](design/plugin-core-boundary23-review.md)、
+[终态组合方向](design/agent-plugin-composition-direction.md)；
+[边界①审查入口](design/plugin-core-boundary1-review.md) 保留此前停点事实。
+能力消费者核对见 [P6 对账](design/capability-consumer-audit.md)。
 兼容读取退役前先看 [hua-home 数据盘点与截止方案](design/compatibility-cutoff-inventory.md)，
 按实际状态区分结构转换、不可变历史读取与当前恢复协议。
 
@@ -82,3 +87,5 @@ Git worktree 保存源码、测试和项目文档；Akashic `<workspace>` 保存
 ## 5. 维护本索引
 
 新增、移动或删除工作手册文件时更新相关入口和入站链接；检查相对链接、决策状态和路由是否仍能带到真实实现。无需维护第二份完整文件树。历史事故分析保留在 [语义安全设计](design/project-workbook-and-semantic-safety.md)，不能用已退役的流程覆盖当前工作手册。
+
+- [内置插件逐项禁用验收](design/builtin-disable-matrix.md)：#1179 E6 的完整发行制品、49 项依赖隔离和冷启动证据。
