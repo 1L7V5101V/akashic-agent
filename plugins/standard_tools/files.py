@@ -102,10 +102,7 @@ class FileTool:
             allowed = raw.pop("_allowed_dir")
             backend = type(self._backend)(self._ctx.require(FILES), allowed_dir=None if allowed is None else Path(allowed))
         try:
-            value = (
-                await backend.read_raw(**raw) if isinstance(backend, ReadFileTool)
-                else await backend.execute(**raw)
-            )
+            value = await backend.execute(**raw)
         finally:
             if backend is not self._backend:
                 await backend.aclose()
