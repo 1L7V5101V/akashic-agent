@@ -19,7 +19,7 @@ import signal
 import sys
 import tomllib
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
 _DISTRIBUTION_COMMANDS = frozenset({"dashboard", "workload-controller"})
@@ -192,19 +192,12 @@ if __name__ == "__main__" and _run_lightweight_command():
 
 
 from agent.config import Config
-from agent.migrations import (
-    MigrationOutcome,
-    migrate_installation,
-)
-from agent.restart import RestartGate, SupervisorCommitChannel
-from agent.supervisor import RESTART_EXIT_CODE, run_supervisor
-from agent.plugins.doctor import format_plugin_doctor_report, run_plugin_doctor
-from agent.plugins.install import set_installed_plugin_enabled
-from bootstrap.app import build_app_runtime
 from agent.plugins.entrypoints import invoke_plugin_command, invoke_distribution_command
-from bootstrap.init_workspace import InitSummary, init_workspace
-from bootstrap.runtime_readiness import RuntimeReadiness
-from core.net.http import SharedHttpResources
+
+# 各命令的实现只在对应分支导入；插件命令客户端不加载迁移、重启、HTTP 与管理命令。
+if TYPE_CHECKING:
+    from agent.migrations import MigrationOutcome
+    from bootstrap.init_workspace import InitSummary
 
 _HELP = """\
 用法: python main.py [命令] [选项]
@@ -285,6 +278,8 @@ def _prepare_startup_migrations(
     }:
         return None
     if command in {"", "supervise"} and (not config_path.exists() or not workspace.exists()):
+        from bootstrap.init_workspace import init_workspace
+
         # 首次启动必须先建立空选择，迁移不能抢先把新目录变成旧 workspace。
         init_workspace(config_path=config_path, workspace=workspace)
     if command in {"init", "setup"} and not workspace.exists():
@@ -293,6 +288,8 @@ def _prepare_startup_migrations(
         return None
     if command == "gateway" and os.environ.get("AKASHIC_SUPERVISED") == "1":
         return None
+    from agent.migrations import migrate_installation
+
     outcome = migrate_installation(config_path, workspace)
     if outcome.state == "migrated":
         print(f"启动迁移完成: migrations={len(outcome.migrations)}")
@@ -303,6 +300,7 @@ async def inspect_modules(config_path: str, workspace: Path) -> None:
     import logging
     from bootstrap.cleanup import run_cleanup_steps
     from bootstrap.tools import build_core_runtime
+    from core.net.http import SharedHttpResources
 
     logging.getLogger().setLevel(logging.WARNING)
     config = Config.load(config_path, workspace=workspace)
@@ -322,6 +320,12 @@ async def inspect_modules(config_path: str, workspace: Path) -> None:
 
 
 async def serve(config_path: str, workspace: Path) -> int:
+    # Web shell 与 FastAPI 只属于 gateway；插件命令客户端不加载它们。
+    from agent.restart import RestartGate, SupervisorCommitChannel
+    from agent.supervisor import RESTART_EXIT_CODE
+    from bootstrap.app import build_app_runtime
+    from bootstrap.runtime_readiness import RuntimeReadiness
+
     commit_channel = SupervisorCommitChannel.from_environment()
     if commit_channel is not None:
         commit_channel.stage("gateway.starting")
@@ -625,6 +629,8 @@ if __name__ == "__main__":
         sys.exit(1)
 
     if args and args[0] == "setup":
+        from bootstrap.init_workspace import init_workspace
+
         summary = init_workspace(config_path=Path(config_path), workspace=workspace)
         for note in summary.notes:
             print(note)
@@ -632,6 +638,8 @@ if __name__ == "__main__":
         sys.exit(0)
 
     if args and args[0] == "init":
+        from bootstrap.init_workspace import init_workspace
+
         summary = init_workspace(
             config_path=config_path,
             workspace=workspace,
@@ -646,6 +654,8 @@ if __name__ == "__main__":
             sys.exit(1)
         plugin_id = args[1]
         enabled = args[0] == "plugin-enable"
+        from agent.plugins.install import set_installed_plugin_enabled
+
         try:
             manifest = set_installed_plugin_enabled(plugin_id, enabled=enabled, workspace=workspace)
         except ValueError as exc:
@@ -659,6 +669,8 @@ if __name__ == "__main__":
         target_plugin_id = ""
         if len(args) >= 2 and not args[1].startswith("--"):
             target_plugin_id = args[1]
+        from agent.plugins.doctor import format_plugin_doctor_report, run_plugin_doctor
+
         report = run_plugin_doctor(
             plugin_id=target_plugin_id,
             workspace=workspace,
@@ -675,6 +687,8 @@ if __name__ == "__main__":
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             sys.exit(2)
+        from agent.supervisor import run_supervisor
+
         sys.exit(
             run_supervisor(
                 config_path=Path(config_path),
@@ -719,6 +733,8 @@ if __name__ == "__main__":
         )
         sys.exit(asyncio.run(serve(config_path, workspace)))
     else:
+        from agent.supervisor import run_supervisor
+
         sys.exit(
             run_supervisor(
                 config_path=Path(config_path),

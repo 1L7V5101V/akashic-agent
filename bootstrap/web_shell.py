@@ -99,6 +99,9 @@ class WebShellServer(uvicorn.Server):
     """在线程和进程入口之间发布确定的监听启动结果。"""
 
     def __init__(self, config: uvicorn.Config) -> None:
+        self._exit_loop: asyncio.AbstractEventLoop | None = None
+        self._exit_event: asyncio.Event | None = None
+        self._exit_requested = False
         super().__init__(config)
         self.startup_event = threading.Event()
 
@@ -107,6 +110,32 @@ class WebShellServer(uvicorn.Server):
             await super().startup(sockets=sockets)
         finally:
             self.startup_event.set()
+
+    @property
+    def should_exit(self) -> bool:
+        return self._exit_requested
+
+    # uvicorn 只轮询该标志；置位时同时通知主循环，可能来自信号处理器。
+    @should_exit.setter
+    def should_exit(self, value: bool) -> None:
+        self._exit_requested = value
+        loop, event = self._exit_loop, self._exit_event
+        if value and loop is not None and event is not None and not loop.is_closed():
+            _ = loop.call_soon_threadsafe(event.set)
+
+    # 未请求退出时保持 uvicorn 每 0.1s 一次的 on_tick 节拍。
+    async def main_loop(self) -> None:
+        self._exit_event = asyncio.Event()
+        self._exit_loop = asyncio.get_running_loop()
+        counter = 0
+        should_exit = await self.on_tick(counter)
+        while not should_exit:
+            counter = (counter + 1) % 864000
+            try:
+                _ = await asyncio.wait_for(self._exit_event.wait(), timeout=0.1)
+            except TimeoutError:
+                pass
+            should_exit = await self.on_tick(counter)
 
 
 def create_web_shell_app(workspace: Path) -> FastAPI:
