@@ -31,6 +31,7 @@ async function readyDriver() {
 }
 const computer = new ComputerLifecycle({
   idleMs: duration("COMPUTER_IDLE_MS", 600000),
+  onChange: scheduleState,
   async start(exited) {
     // 1. 图形进程就绪后才创建 driver；控制服务健康检查不会走这里。
     const deadline = Date.now() + 20000;
@@ -49,6 +50,8 @@ const computer = new ComputerLifecycle({
     if (failure) throw failure;
     driver = new ComputerDriver({ anonymousIdleMs: duration("COMPUTER_ANONYMOUS_IDLE_MS", 600000) });
     driver.on("cursor", publishCursor);
+    driver.on("control", scheduleState);
+    driver.on("targets", scheduleState);
     driverReady = driver.start();
     await driverReady;
   },
@@ -68,21 +71,68 @@ let activity = { revision: 0, noticeId: 0, active: false, action: "", updatedAt:
 let activeTargetId = "";
 const legacyCall = new AsyncLocalStorage();
 const browserSnapshots = new Map();
-const cursorClients = new Set();
+// 订阅者 → 它最近收到的状态快照；按订阅者去重，新订阅者也能补到最新状态。
+const eventClients = new Map();
 let cursor = { revision: 0, point: null, error: "" };
+let stateTimer = null;
+let stateDirty = false;
 
 function cursorEvent() {
   const ttlMs = cursor.point ? Math.max(0, cursor.point.expiresAt - Date.now()) : 0;
-  return `data: ${JSON.stringify({ ...cursor, ttlMs })}\n\n`;
+  return `data: ${JSON.stringify({ type: "cursor", ...cursor, ttlMs })}\n\n`;
 }
 
-/** 坐标只驻留内存；慢消费者断开，不能让操作等待显示或积压帧。 */
+/** 慢消费者直接断开，不能让操作等待显示或积压事件。 */
+function broadcast(event) {
+  for (const client of eventClients.keys()) {
+    if (!client.write(event)) client.destroy();
+  }
+}
+
+/** 坐标只驻留内存。 */
 function publishCursor({ point, error = "" }) {
   cursor = { revision: cursor.revision + 1,
     point: point ? { ...point, expiresAt: Date.now() + 5000 } : null, error };
-  const event = cursorEvent();
-  for (const client of cursorClients) {
-    if (!client.write(event)) client.destroy();
+  broadcast(cursorEvent());
+}
+
+async function stateEvent() {
+  // 先等目录，再同步读取其余字段，避免拿等待之前的旧值。
+  const targets = driver && computer.state === "ready" ? await driver.targets() : [];
+  const state = {
+    type: "state",
+    noticeId: activity.noticeId,
+    active: activity.active,
+    browser: { state: computer.state, error: computer.error },
+    targets,
+    control: Boolean(driver?.control),
+  };
+  return `data: ${JSON.stringify(state)}\n\n`;
+}
+
+/** 运行时、活动、控制权和目录变化时触发；合并 50ms 内的变化，内容不变就不推送。 */
+function scheduleState() {
+  stateDirty = true;
+  if (!stateTimer) stateTimer = setTimeout(publishState, 50);
+}
+
+async function publishState() {
+  // 读取期间到达的变化只记为 dirty，读完后补发一次最新快照，不能丢。
+  stateDirty = false;
+  try {
+    const event = await stateEvent();
+    for (const [client, sent] of eventClients) {
+      if (sent === event) continue;
+      eventClients.set(client, event);
+      if (!client.write(event)) client.destroy();
+    }
+  } catch (error) {
+    // 目录读取可能撞上浏览器正在关闭；稍后重读一次，不推送半截状态。
+    console.error("Computer state:", error.message);
+    setTimeout(scheduleState, 1000);
+  } finally {
+    stateTimer = null;
+    if (stateDirty) scheduleState();
   }
 }
 
@@ -125,6 +175,7 @@ async function saveActivity(action, active) {
   const temporary = `${activityPath}.new`;
   await writeFile(temporary, JSON.stringify(activity), { mode: 0o600 });
   await rename(temporary, activityPath);
+  scheduleState();
 }
 
 async function tracked(action, task) {
@@ -858,16 +909,19 @@ const server = createServer(async (request, response) => {
         control: "ready",
         browser: computer.state,
       });
-    } else if (request.method === "GET" && url.pathname === "/cursor") {
-      // 只读订阅不唤醒、不 touch，也不写 activity 或 profile。
-      if (cursorClients.size >= 32) {
-        json(response, 503, { error: "Too many cursor viewers" });
+    } else if (request.method === "GET" && url.pathname === "/events") {
+      // 只读订阅不唤醒，也不写 activity 或 profile；先发完整快照，之后只发变化。
+      if (eventClients.size >= 32) {
+        json(response, 503, { error: "Too many Computer viewers" });
         return;
       }
+      const snapshot = await stateEvent();
       response.writeHead(200, {"content-type": "text/event-stream", "cache-control": "no-store"});
-      response.write(cursorEvent());
-      cursorClients.add(response);
-      response.once("close", () => cursorClients.delete(response));
+      response.write(snapshot + cursorEvent());
+      eventClients.set(response, snapshot);
+      response.once("close", () => eventClients.delete(response));
+      // 快照读取期间可能有变化已经广播过，补一次核对。
+      scheduleState();
     } else if (request.method === "GET" && url.pathname === "/targets") {
       json(response, 200, { targets: driver && computer.state === "ready" ? await driver.targets() : [],
         control: Boolean(driver?.control) });
@@ -922,9 +976,6 @@ const server = createServer(async (request, response) => {
       }
       json(response, 200, { controlled: url.pathname !== "/control/release" });
     } else if (request.method === "POST" && url.pathname === "/wake") {
-      json(response, 200, computer.status());
-    } else if (request.method === "POST" && url.pathname === "/touch") {
-      computer.touch();
       json(response, 200, computer.status());
     } else if (request.method === "GET" && url.pathname === "/screenshot") {
       await screenshot(response, url.searchParams.get("quiet") === "1");
@@ -1041,7 +1092,7 @@ async function stop() {
   stopping = true;
   clearTimeout(refreshTimer);
   server.close();
-  for (const client of cursorClients) client.end();
+  for (const client of eventClients.keys()) client.end();
   openCliServer.close();
   const timer = setTimeout(() => {
     console.error("Computer shutdown timed out");
