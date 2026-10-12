@@ -306,13 +306,18 @@ def _topics(texts: Mapping[str, str], prefix: str) -> str:
             continue
         fields, body = split_frontmatter(texts[doc])
         content = "\n".join(body).strip()
-        if fields.get("pinned", "").lower() == "true" and content:
-            if len(content) > budget:
-                content = content[:budget] + f"\n（已截断：pinned 内容超过 {PINNED_CHARS} 字配额，请精简或取消 pinned）"
-            budget -= len(content)
-            pinned.append(f"### {doc}\n{content}")
+        description = fields.get("description") or "（无 description）"
+        if fields.get("pinned", "").lower() == "true" and content and budget > 0:
+            # 配额只计正文；截断提示另附，剩余额度不会为负。
+            shown = content[:budget]
+            budget -= len(shown)
+            if len(shown) < len(content):
+                shown += f"\n（已截断：pinned 正文超过 {PINNED_CHARS} 字配额，完整内容用 read_file 读取，或精简、取消 pinned）"
+            pinned.append(f"### {doc}\n{shown}")
+        elif fields.get("pinned", "").lower() == "true" and content:
+            index.append(f"- {doc} — {description}（pinned，但配额已用尽，未展开）")
         else:
-            index.append(f"- {doc} — {fields.get('description') or '（无 description）'}")
+            index.append(f"- {doc} — {description}")
     return "\n\n".join([*pinned, *(["索引：\n" + "\n".join(index)] if index else [])])
 
 
@@ -334,6 +339,7 @@ def _usage(root: str, scope: str | None, folder: str | None) -> str:
 - 用户本人的身份、偏好、明确要求 → PROFILE.md 对应标题下。
 - 用户对你工作方式的纠正或确认 → 跨项目适用的写全局主题，只对本项目适用的写项目文件夹；写明原因。
 - 项目的约定、决策、背景与外部资源位置 → 项目文件夹的主题文件。{where}
+- 已有的记忆文件只用 edit_file 修改或追加，write_file 只用来新建文件，避免整文件覆盖掉后台刚写入的条目。
 - 每条是一行 `- ` 文本；新主题文件以 `---` / `description: 一句话` / `---` 开头；先更新已有主题和条目，不追加相互矛盾的条目。
 - 在 frontmatter 加 `pinned: true` 会让该主题常驻，只用于每次都需要的少量内容。
 - 不要保存：能从仓库、配置或命令直接读到的内容，临时任务状态，调试步骤，git 历史。"""
