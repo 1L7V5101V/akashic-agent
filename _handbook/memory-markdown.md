@@ -38,3 +38,12 @@ compaction summary used by Output
 已知限制：原生 `write_file` / `edit_file`、shell 与外部编辑器不参与后台的文件锁。比对与替换之间、以及原生工具自身读写之间仍有
 很小的竞争窗口，极少数并发下可能静默丢失一条记忆；为此提示 agent 对已有记忆文件只用 `edit_file`。
 消息正文只追加，压缩不 UPDATE/DELETE 既有消息。
+
+## 注入与 agent 写入
+
+system 材料按"会话 + 最新压缩摘要"冻结：同一压缩代内前缀不变，agent 或后台写入在下一次压缩或新会话中可见。内容依次为：
+使用规则（记忆目录绝对路径、读写方式、易变信息先核实）→ `SELF.md` → `PROFILE.md` → 当前项目文件夹的 pinned 全文与索引 →
+全局主题的 pinned 全文与索引 → 其他项目文件夹清单（不加载，需要时 `rg`）。索引由 frontmatter `description` 自动生成；
+pinned 每组 4000 字，超出截断并提示。不属于项目的会话没有项目段。
+
+agent 用原生 `read_file` / `write_file` / `edit_file` / `shell rg` 读写记忆，不经过证据校验，也不与 Akasha 召回争用同一通道。
