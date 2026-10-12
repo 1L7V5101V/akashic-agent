@@ -7,6 +7,7 @@
       "label": "纸感",
       "status": "stable",
       "colorScheme": "light",
+      "chart": {"1": "#2563eb", "2": "#0f766e", "3": "#b45309", "4": "#7c3aed", "5": "#be185d", "6": "#4d7c0f"},
       "material": {
         "primary": "#1b365d", "onPrimary": "#fafaf9", "primaryContainer": "#eef2f7", "onPrimaryContainer": "#0d1f38",
         "secondary": "#53524e", "onSecondary": "#fafaf9", "secondaryContainer": "#e8e7e2", "onSecondaryContainer": "#1c1c19",
@@ -30,6 +31,7 @@
       "label": "墨纸",
       "status": "stable",
       "colorScheme": "dark",
+      "chart": {"1": "#60a5fa", "2": "#2dd4bf", "3": "#fbbf24", "4": "#c4b5fd", "5": "#f472b6", "6": "#a3e635"},
       "material": {
         "primary": "#a8bdd9", "onPrimary": "#0d1f38", "primaryContainer": "#2a4568", "onPrimaryContainer": "#eef2f7",
         "secondary": "#c8c6bf", "onSecondary": "#1c1c19", "secondaryContainer": "#3d3d3a", "onSecondaryContainer": "#e8e7e2",

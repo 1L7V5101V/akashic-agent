@@ -398,9 +398,13 @@ export function TimelineMessageView({ message, lookupMessage, toolResults, onNav
   const attachment = (id: string) => {
     const ref = message.attachments.find((item) => item.artifact_id === id)!;
     if (renderAttachment) return renderAttachment(ref);
-    return <MessageAttachmentItem attachment={{ id: ref.artifact_id, type: "file",
+    return <Fragment>
+      <PluginUiSlot name="message.attachment" sessionId={message.session_id}
+        messageId={message.id} block={ref} />
+      <MessageAttachmentItem attachment={{ id: ref.artifact_id, type: "file",
       filename: ref.filename ?? "附件", mediaType: ref.media_type ?? "application/octet-stream",
-      url: `/api/chat/artifacts/${encodeURIComponent(ref.artifact_id)}` }} />;
+      url: `/api/chat/artifacts/${encodeURIComponent(ref.artifact_id)}` }} />
+    </Fragment>;
   };
   return <div className={`message-row timeline-message timeline-${body.kind}`}>
     <div className={body.kind === "input" ? "user-bubble" : "agent-content"}>
@@ -511,10 +515,12 @@ function MessageAttachmentItem({ attachment }: { attachment: MessageAttachment }
   return (
     <AttachmentHoverCard>
       <AttachmentHoverCardTrigger asChild>
-        <Attachment className="message-attachment-chip is-file" data={attachment}>
-          <AttachmentPreview />
-          <span>{label}</span>
-        </Attachment>
+        <a className="message-attachment-download" href={attachment.url} download={label} aria-label={`下载 ${label}`}>
+          <Attachment className="message-attachment-chip is-file" data={attachment}>
+            <AttachmentPreview />
+            <span>{label}</span>
+          </Attachment>
+        </a>
       </AttachmentHoverCardTrigger>
       <AttachmentHoverCardContent>
         <AttachmentHover attachment={attachment} />

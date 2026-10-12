@@ -385,7 +385,8 @@ export function timelineReplyGroups(messages: TimelineMessage[], activities: Rep
         pending.delete(key);
       }
     } else if ((body.kind === "input" && message.author === "user")
-      || (body.kind === "control" && body.action !== "resume")) {
+      || (body.kind === "control" && body.action !== "resume")
+      || (body.kind === "tool_result" && message.attachments.length > 0)) {
       const throughSeq = body.kind === "control" ? body.through_seq : message.seq - 1;
       const members = pending.get(key) ?? [];
       const closed = members.filter((item) => item.seq <= throughSeq);

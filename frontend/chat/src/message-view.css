@@ -1548,3 +1548,16 @@ button.tool-step-summary:active {
 .tool-result-fields dd { margin: 0.25rem 0 0; min-width: 0; }
 .tool-result-fields details { padding-inline-start: 0.75rem; border-inline-start: 1px solid var(--ak-rule-subtle); }
 .tool-result-data.error .tool-result { color: var(--ak-color-status-error); }
+
+.message-attachment-download {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  max-width: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+.message-attachment-download:focus-visible {
+  outline: 2px solid var(--ak-color-action-primary);
+  outline-offset: 2px;
+}

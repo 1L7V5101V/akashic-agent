@@ -8,6 +8,7 @@ export type PluginUiSlotName =
   | "turn.before_reasoning"
   | "turn.before_tool"
   | "turn.after_answer"
+  | "message.attachment"
   | "drawer.panel"
   | "dashboard.main";
 
@@ -34,6 +35,7 @@ export interface PluginUiQueryOptions {
 }
 
 export interface PluginUiRenderer {
+  accepts?(block: unknown): boolean;
   prefetch?(context: PluginUiContext): Promise<void>;
   mount(host: HTMLElement, context: PluginUiContext): void | (() => void);
 }
@@ -119,6 +121,7 @@ const SLOT_NAMES = new Set<Exclude<PluginUiSlotName, "dashboard.main">>([
   "turn.before_tool",
   "turn.after_answer",
   "drawer.panel",
+  "message.attachment",
 ]);
 
 function emitChange() {
@@ -327,8 +330,9 @@ function parseDefinition(value: unknown, plugin: PluginUiCatalogItem): PluginUiD
 
 function isRenderer(value: unknown): value is PluginUiRenderer {
   if (!value || typeof value !== "object") return false;
-  const renderer = value as { mount?: unknown; prefetch?: unknown };
+  const renderer = value as { mount?: unknown; prefetch?: unknown; accepts?: unknown };
   return typeof renderer.mount === "function"
+    && (renderer.accepts === undefined || typeof renderer.accepts === "function")
     && (renderer.prefetch === undefined || typeof renderer.prefetch === "function");
 }
 
@@ -418,7 +422,11 @@ export function PluginUiSlot({
     const renderer = loaded?.revision === plugin.revision
       ? loaded.definition.slots[name]
       : undefined;
-    return renderer && (!prefetch || renderer.prefetch) ? [{ plugin, renderer }] : [];
+    let accepted = true;
+    let error: string | undefined;
+    try { accepted = !renderer?.accepts || renderer.accepts(block); }
+    catch (cause) { error = cause instanceof Error ? cause.message : String(cause); }
+    return renderer && accepted && (!prefetch || renderer.prefetch) ? [{ plugin, renderer, error }] : [];
   });
   // 目录加载失败时保留本页已经挂载的卡片；新页面不会执行旧模块。
   const previous = React.useRef<typeof renderers>([]);
@@ -437,7 +445,9 @@ export function PluginUiSlot({
   return shown.length || notice ? (
     <div className={prefetch ? "plugin-ui-prefetch" : "plugin-ui-slot"} data-slot={name} data-version={version}>
       {notice && !prefetch && <p role="status">{notice} <button type="button" onClick={() => window.location.reload()}>刷新页面</button></p>}
-      {shown.map(({ plugin, renderer }) => (
+      {shown.map(({ plugin, renderer, error }) => error ? (
+        <p key={plugin.id} role="alert">插件界面错误：{error}</p>
+      ) : (
         <ViewportMountedPlugin
           key={`${plugin.id}:${plugin.revision}:${name}`}
           pluginId={plugin.id}
