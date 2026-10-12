@@ -54,7 +54,7 @@ from .documents import (
     PROFILE, SELF, SELF_HEADINGS, PROFILE_HEADINGS, InvalidDraft, Op, Workspace,
     check_changes, parse_ops, section_of,
 )
-from .store import DEFAULT_SELF_MD, MarkdownProfileStore
+from .store import DEFAULT_SELF_MD, ConcurrentChange, MarkdownProfileStore
 from .contract import MEMORY_WRITES
 
 logger = logging.getLogger("plugins.markdown_memory")
@@ -551,10 +551,11 @@ async def apply(ctx: Context) -> None:
                                         compaction=compaction)
                                     except (RuntimeError, TimeoutError) as error:
                                         failure = ModelError.read(error)
-                                        if failure is None or not failure.retryable:
+                                        if not isinstance(error, ConcurrentChange) and (
+                                                failure is None or not failure.retryable):
                                             raise
                                         logger.warning(
-                                            "Markdown 模型暂时失败，将重试原消息: session=%s message=%s error=%s",
+                                            "Markdown 模型或文件暂时不可用，将重试原消息: session=%s message=%s error=%s",
                                             session, message.message_id, type(error).__name__, exc_info=True,
                                         )
                                         retry = True

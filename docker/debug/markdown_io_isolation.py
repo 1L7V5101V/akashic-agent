@@ -7,6 +7,7 @@ import threading
 from unittest.mock import patch
 
 from plugins.markdown_memory import store as store_module
+from plugins.markdown_memory.documents import PROFILE_TEMPLATE
 from plugins.markdown_memory.plugin import profile_lock, start_store
 from plugins.markdown_memory.store import MarkdownProfileStore
 
@@ -60,7 +61,7 @@ async def check(root: Path) -> None:
             assert "## 用户偏好\n- new memory" in profile and "- new self" in self_profile
             assert store.is_applied("ref")
             backup = store._read_receipt("ref", "markdown_before_v1")
-            assert backup == {"PROFILE.md": "", "SELF.md": before_self}
+            assert backup == {"PROFILE.md": PROFILE_TEMPLATE, "SELF.md": before_self}
             # 重放已应用操作保持幂等，文件不再变化。
             store.apply("ref")
             assert (store.read("PROFILE.md"), store.read("SELF.md")) == (profile, self_profile)

@@ -1583,7 +1583,7 @@ def _inside_memory_context(report_dir: Path) -> int:
                 and all(
                     hashlib.sha256(Path("/sandbox/workspace/memory", doc).read_text(encoding="utf-8")
                                    .encode("utf-8")).hexdigest() == digest
-                    for doc, digest in applied.items()
+                    for doc, digest in cast(dict[str, str], applied.get("files", {})).items()
                 )
             ):
                 receipt_payloads = candidate

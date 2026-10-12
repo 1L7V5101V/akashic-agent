@@ -31,5 +31,10 @@ compaction summary used by Output
   → markdown_before_v1（首次叠加前内容）+ markdown_ops_applied_v1
 ```
 
-叠加作用于锁内读到的当前文件，agent 或人工的并发修改不会被覆盖；崩溃后启动时重放未确认的 draft。
+叠加作用于锁内读到的当前文件；替换前再比对一次读到的内容，变化则重读重叠加，3 次仍变化就保留 draft 待下次重试。
+重放时前提已失效的操作（scope 文件夹不在、supersede 新旧条目都不在、主题文件已删除）跳过，写入 applied receipt 的 `conflicts` 并记日志。
+操作 draft 与会话进度同一事务提交；缺少进度的提炼 draft 拒绝应用。崩溃后启动时重放未确认的 draft。
+
+已知限制：原生 `write_file` / `edit_file`、shell 与外部编辑器不参与后台的文件锁。比对与替换之间、以及原生工具自身读写之间仍有
+很小的竞争窗口，极少数并发下可能静默丢失一条记忆；为此提示 agent 对已有记忆文件只用 `edit_file`。
 消息正文只追加，压缩不 UPDATE/DELETE 既有消息。

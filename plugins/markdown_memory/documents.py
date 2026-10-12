@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 import re
 from typing import Literal, cast, get_args
 
@@ -106,6 +106,9 @@ def scope_text(scope: str, description: str) -> str:
     return f"---\nscope: {scope}\ndescription: {description}\n---\n"
 
 
+PROFILE_TEMPLATE = "\n\n".join(PROFILE_HEADINGS) + "\n"
+
+
 def topic_text(description: str, line: str) -> str:
     return f"---\ndescription: {description}\n---\n{line}\n"
 
@@ -127,33 +130,38 @@ class Workspace:
     texts: dict[str, str]
     folders: dict[str, str]
     scope: str | None
+    # 重放时前提失效而跳过的操作；与"已应用"区分，写入 applied receipt。
+    conflicts: list[str] = field(default_factory=lambda: [])
 
     def folder(self) -> str | None:
         return next((name for name, key in self.folders.items() if key == self.scope), None)
 
-    # 叠加操作；strict 拒绝失效前提，否则按幂等规则收敛（供 rebase 与崩溃恢复）。
+    # 叠加操作；strict 校验模型给出的原始目标与前提，否则按已验证的 scope 重放并收敛（供 rebase 与崩溃恢复）。
     def apply(self, ops: tuple[Op, ...], *, strict: bool) -> None:
-        for op in ops:
+        for index, op in enumerate(ops):
             if op.op == "create_folder":
                 self._create_folder(op, strict)
                 continue
-            doc = self._redirect(op.doc)
+            doc = op.doc if strict else self._replay_target(op.doc)
+            if doc is None:
+                self.conflicts.append(f"#{index} {op.op} {op.doc}: 当前 scope 没有文件夹")
+                continue
             if strict and not writable(doc, self.folder()):
                 raise InvalidDraft(f"不可写入的路径: {op.doc}")
             if op.op == "create" and doc not in self.texts:
                 self.texts[doc] = topic_text(op.description, op.line)
             elif op.op in {"add", "create"}:
-                self._add(doc, op, strict)
+                self._add(doc, op, strict, index)
             else:
-                self._replace(doc, op, strict)
+                self._replace(doc, op, strict, index)
 
-    def _redirect(self, doc: str) -> str:
-        # rebase 时本 scope 已由他人建好文件夹，则沿用现有名字。
+    def _replay_target(self, doc: str) -> str | None:
+        # 校验时已确认三段路径只指向本 scope；重放按 scope 找实际文件夹，文件夹名只负责定位。
         parts = doc.split("/")
+        if len(parts) != 3:
+            return doc
         folder = self.folder()
-        if len(parts) == 3 and folder is not None and parts[1] not in self.folders:
-            return "/".join((parts[0], folder, parts[2]))
-        return doc
+        return None if folder is None else "/".join((parts[0], folder, parts[2]))
 
     def _create_folder(self, op: Op, strict: bool) -> None:
         name = op.doc.split("/", 1)[1]
@@ -167,14 +175,14 @@ class Workspace:
         self.folders[name] = self.scope
         self.texts[f"{TOPICS}/{name}/{SCOPE_FILE}"] = scope_text(self.scope, op.description)
 
-    def _add(self, doc: str, op: Op, strict: bool) -> None:
+    def _add(self, doc: str, op: Op, strict: bool, index: int) -> None:
         text = self.texts.get(doc, "")
         if op.line in text.splitlines():
             if strict:
                 raise InvalidDraft(f"重复已有条目: {op.line}")
             return
         if doc == PROFILE and not text.strip():
-            text = "\n\n".join(PROFILE_HEADINGS) + "\n"
+            text = PROFILE_TEMPLATE
         if strict and doc in USER_SECTIONS and op.section not in USER_HEADINGS[doc]:
             raise InvalidDraft(f"{doc} 的 section 必须是 {list(USER_HEADINGS[doc])} 之一")
         if doc in USER_SECTIONS:
@@ -183,12 +191,17 @@ class Workspace:
             self.texts[doc] = text.rstrip("\n") + "\n" + op.line + "\n"
         elif strict:
             raise InvalidDraft(f"主题不存在，应使用 create: {doc}")
+        else:
+            self.conflicts.append(f"#{index} add {doc}: 主题文件已不存在")
 
-    def _replace(self, doc: str, op: Op, strict: bool) -> None:
+    def _replace(self, doc: str, op: Op, strict: bool, index: int) -> None:
         lines = self.texts.get(doc, "").splitlines()
         if op.old not in lines:
             if strict:
                 raise InvalidDraft(f"旧条目不存在: {op.old}")
+            # retract 的结果就是旧条目不在；supersede 只有新条目已在才算已应用。
+            if op.op == "supersede" and op.line not in lines:
+                self.conflicts.append(f"#{index} supersede {doc}: 旧条目与新条目都不在")
             return
         index = lines.index(op.old)
         lines[index:index + 1] = [] if op.op == "retract" or op.line in lines else [op.line]
@@ -235,7 +248,9 @@ def check_changes(before: Mapping[str, str], after: Mapping[str, str],
         old = before.get(doc, "")
         if text == old:
             continue
-        added = [row for row in text.splitlines() if row not in old.splitlines()]
+        # 空行与该文档固定标题是程序维护的结构，不按条目校验。
+        structure = {"", *(PROFILE_HEADINGS if doc == PROFILE else SELF_HEADINGS if doc == SELF else ())}
+        added = [row for row in text.splitlines() if row not in old.splitlines() and row not in structure]
         if doc.endswith(SCOPE_FILE) or (doc.startswith(TOPICS) and not old):
             fields, _ = split_frontmatter(text)
             if not 0 < len(fields.get("description", "")) <= MAX_DESCRIPTION_CHARS:

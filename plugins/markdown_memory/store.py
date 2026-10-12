@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -9,7 +10,14 @@ from typing import Any, cast
 
 from infra.persistence.json_store import atomic_write_text
 
-from .documents import PROFILE, SCOPE_FILE, SELF, TOPICS, Workspace, parse_ops, split_frontmatter
+from .documents import PROFILE, PROFILE_TEMPLATE, SCOPE_FILE, SELF, TOPICS, Workspace, parse_ops, split_frontmatter
+
+logger = logging.getLogger(__name__)
+_APPLY_ATTEMPTS = 3
+
+
+class ConcurrentChange(RuntimeError):
+    """叠加期间文件被其他 writer 持续修改；draft 保留待处理，由调用者稍后重试。"""
 
 
 DEFAULT_SELF_MD = """# Akashic 的自我认知
@@ -37,8 +45,9 @@ class MarkdownProfileStore:
         self.root = root
         self.receipts_path = receipts_path
         (root / TOPICS).mkdir(parents=True, exist_ok=True)
-        if not (root / PROFILE).exists():
-            atomic_write_text(root / PROFILE, "", domain="markdown_memory")
+        # 缺失或只有空白的画像写入合法标题结构；有内容的手写文件保持原样。
+        if not (root / PROFILE).exists() or not (root / PROFILE).read_text(encoding="utf-8").strip():
+            atomic_write_text(root / PROFILE, PROFILE_TEMPLATE, domain="markdown_memory")
         if not (root / SELF).exists():
             atomic_write_text(root / SELF, DEFAULT_SELF_MD, domain="markdown_memory")
         self._init_schema()
@@ -108,10 +117,12 @@ class MarkdownProfileStore:
 
     def write_draft(self, source_ref: str, payload: dict[str, object], *,
                     session_key: str, generation: int) -> dict[str, object]:
-        stored = self._write_once(source_ref, "markdown_ops_v1", payload)
-        _ = self._write_once(source_ref, "markdown_projection_order_v1",
-                             {"session_key": session_key, "generation": generation})
-        return stored
+        # 操作与会话进度同一事务提交，恢复时不会出现只有操作的提炼 draft。
+        self._write_once_many(source_ref, (
+            ("markdown_ops_v1", payload),
+            ("markdown_projection_order_v1", {"session_key": session_key, "generation": generation}),
+        ))
+        return dict(payload)
 
     def is_applied(self, source_ref: str) -> bool:
         return (self._read_receipt(source_ref, "markdown_ops_applied_v1") is not None
@@ -161,20 +172,34 @@ class MarkdownProfileStore:
         draft = self.read_draft(source_ref)
         if draft is None:
             raise RuntimeError(f"Markdown 操作 draft 缺失: {source_ref}")
+        if self._read_receipt(source_ref, "markdown_projection_order_v1") is None:
+            raise RuntimeError(f"Markdown 提炼 draft 缺少会话进度，拒绝应用: {source_ref}")
         scope = draft.get("scope")
         if scope is not None and not isinstance(scope, str):
             raise ValueError(f"Markdown draft scope 无效: {source_ref}")
-        workspace = self.workspace(scope)
-        before = dict(workspace.texts)
-        workspace.apply(parse_ops({"ops": draft.get("ops")}), strict=False)
-        changed = {doc: text for doc, text in workspace.texts.items() if before.get(doc) != text}
-        self._write_first(source_ref, "markdown_before_v1", {doc: before.get(doc, "") for doc in changed})
-        for doc, text in changed.items():
-            path = self._path(doc)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            atomic_write_text(path, text, domain="markdown_memory")
-        _ = self._write_once(source_ref, "markdown_ops_applied_v1",
-                             {doc: content_digest(text) for doc, text in changed.items()})
+        ops = parse_ops({"ops": draft.get("ops")})
+        for _attempt in range(_APPLY_ATTEMPTS):
+            # 1. 读取当前文件并叠加；不持锁的原生工具可能在其间写入，替换前再比对一次。
+            workspace = self.workspace(scope)
+            before = dict(workspace.texts)
+            workspace.apply(ops, strict=False)
+            changed = {doc: text for doc, text in workspace.texts.items() if before.get(doc) != text}
+            if any(self.read(doc) != before.get(doc, "") for doc in changed):
+                continue
+            # 2. 首次 before-image 保留；写入后才记 applied，冲突随 receipt 留存。
+            self._write_first(source_ref, "markdown_before_v1", {doc: before.get(doc, "") for doc in changed})
+            for doc, text in changed.items():
+                path = self._path(doc)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                atomic_write_text(path, text, domain="markdown_memory")
+            for conflict in workspace.conflicts:
+                logger.warning("Markdown 操作前提失效，已跳过: source_ref=%s %s", source_ref, conflict)
+            _ = self._write_once(source_ref, "markdown_ops_applied_v1", {
+                "files": {doc: content_digest(text) for doc, text in changed.items()},
+                "conflicts": list(workspace.conflicts),
+            })
+            return
+        raise ConcurrentChange(f"Markdown 文件在叠加期间持续变化，保留待处理: {source_ref}")
 
     def _path(self, doc: str) -> Path:
         parts = Path(doc).parts
@@ -216,26 +241,31 @@ class MarkdownProfileStore:
         kind: str,
         payload: dict[str, object],
     ) -> dict[str, object]:
-        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        self._write_once_many(source_ref, ((kind, payload),))
+        return dict(payload)
+
+    # 同一事务写入多条 receipt；已存在的必须与本次内容一致。
+    def _write_once_many(self, source_ref: str, items: tuple[tuple[str, dict[str, object]], ...]) -> None:
         with closing(sqlite3.connect(str(self.receipts_path), timeout=30.0)) as conn:
             _ = conn.execute("BEGIN IMMEDIATE")
-            row = conn.execute(
-                "SELECT payload FROM consolidation_writes WHERE source_ref=? AND kind=?",
-                (source_ref, kind),
-            ).fetchone()
-            if row is not None:
-                if row[0] != encoded:
-                    raise ValueError(f"Markdown profile receipt 内容冲突: {source_ref}/{kind}")
-                conn.commit()
-                return dict(payload)
-            _ = conn.execute(
-                "INSERT INTO consolidation_writes "
-                "(source_ref, kind, payload, trailing_blank_line, done_at) "
-                "VALUES (?, ?, ?, 0, datetime('now'))",
-                (source_ref, kind, encoded),
-            )
+            for kind, payload in items:
+                encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+                row = conn.execute(
+                    "SELECT payload FROM consolidation_writes WHERE source_ref=? AND kind=?",
+                    (source_ref, kind),
+                ).fetchone()
+                if row is not None:
+                    if row[0] != encoded:
+                        conn.rollback()
+                        raise ValueError(f"Markdown profile receipt 内容冲突: {source_ref}/{kind}")
+                    continue
+                _ = conn.execute(
+                    "INSERT INTO consolidation_writes "
+                    "(source_ref, kind, payload, trailing_blank_line, done_at) "
+                    "VALUES (?, ?, ?, 0, datetime('now'))",
+                    (source_ref, kind, encoded),
+                )
             conn.commit()
-        return dict(payload)
 
     def _write_first(self, source_ref: str, kind: str, payload: dict[str, object]) -> None:
         """保留首次尝试的 before-image；重放时后续尝试不覆盖。"""
