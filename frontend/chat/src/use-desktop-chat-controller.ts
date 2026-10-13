@@ -97,6 +97,15 @@ export function useDesktopChatController() {
   const memoryInstalled = pluginCatalog.installed(MEMORY_PLUGIN);
   const [activeSessionId, setActiveSessionId] = useState("");
   const [pendingSessionId, setPendingSessionId] = useState("");
+  const [jobsBySession, setJobsBySession] = useState<Record<string, Array<{
+    id: string;
+    kind: string;
+    label: string;
+    status: "running" | "stopping" | "completed" | "failed" | "timeout" | "killed";
+    detail: string;
+    started_at: number;
+    finished_at?: number | null;
+  }>>>({});
   // 通知入口统一使用网页导航，会话参数在 chatReady 后消费一次。
   const [requestedSessionId, setRequestedSessionId] = useState(
     () => {
@@ -526,6 +535,11 @@ export function useDesktopChatController() {
               if (other.type === "sessions.changed") {
                 void loadSessionsSafely();
                 void reloadPins();
+              } else if (other.type === "session/jobs") {
+                setJobsBySession((prev) => ({
+                  ...prev,
+                  [other.session_id]: other.jobs,
+                }));
               } else if (other.type === "error") {
                 setMessages((currentMessages) => currentMessages.filter((item) => item.id !== other.request_id));
                 reportError(new Error(other.message), "error");
@@ -1036,6 +1050,7 @@ export function useDesktopChatController() {
   }, [closeConnection, connect, loadMessagesSafely, loadModels, loadSessionsSafely, reportError, setReplyAvailable, shellState?.chatReady]);
 
   return {
+    activeSessionJobs: (activeSessionId && jobsBySession[activeSessionId]) || [],
     surface, sidebarSessions, activeSessionId, pendingSessionId, chatReady, messages, timelineMessages, timelineRefresh, replyActivities, replyAvailable, status,
     streamStore, messageElementsRef, copiedMessageId, shellState, stopPending, modelState,
     canSend, modelProblem, modelsPhase, modelsError, retryModels, draftKey: activeSessionId || `new:${newChatProjectId}`,

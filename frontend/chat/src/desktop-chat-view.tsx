@@ -13,6 +13,7 @@ import { DesktopAutoScroll, NarrowReadingChrome, ReadingReturnButton } from "./d
 import { ComposerStatsLine } from "./composer-stats-line";
 import { ThinkingPlaceholder } from "./thinking-placeholder";
 import { DesktopComposer, type ComposerApi } from "./desktop-composer";
+import { JobListAction } from "./job-list-action";
 import { DesktopConversationMessages, DesktopTimelineMessages, messageDayKey } from "./desktop-conversation";
 import { ReplyActivityView } from "./message-view";
 import { MessageSquarePlus } from "lucide-react";
@@ -91,6 +92,7 @@ export function DesktopChatView({ embeddedShell, controller }: DesktopChatViewPr
           {/* 同一父节点下的兄弟 key 必须互不相同；共用会话 ID 会让 React 留下旧标题节点。 */}
           <SessionHeadingTitle key={`title:${activeSessionId}`} heading={headingTitle} value={activeTitle}
             onRename={activeSessionId && !activeSessionDeleted ? (title) => renameSession(activeSessionId, title) : undefined} />
+          <JobListAction jobs={controller.activeSessionJobs} />
           {activeSessionId ? <SessionDirectory key={`directory:${activeSessionId}`} sessionId={activeSessionId}
             refreshKey={Array.from(toolResults.keys()).join("|")} /> : null}
           {/* 窄屏没有常驻侧栏：新会话留在拇指可达的标题行，不必先打开抽屉。 */}
