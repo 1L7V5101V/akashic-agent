@@ -36,6 +36,7 @@ from plugins.channels.contract import (
     StopReceipt,
 )
 from plugins.ledger.contract import MESSAGE_CATALOG, SESSION_ADMIN
+from plugins.jobs.contract import JOB_NOTICES
 
 from .capabilities import (
     MESSAGE_DISPLAY,
@@ -62,6 +63,7 @@ from .services import (
 from .services import ArtifactReadLeasePort, PluginUiProvider, WebUiProvider
 from plugins.ui.contract import MessageDisplayReader
 from .scoped_capabilities import (
+    ScopedJobNotices,
     ScopedMessageDisplay,
     ScopedPluginUiProvider,
     ScopedWebUiProvider,
@@ -299,6 +301,7 @@ class _GenerationAkashicAdapter:
             reply_status=self._reply_status,
         )
         self._web.bind_message_display(self._message_display)
+        self._web.bind_job_notices(ScopedJobNotices(open_scope))
 
     @asynccontextmanager
     async def _open_request_scope(self) -> AsyncIterator[Any]:

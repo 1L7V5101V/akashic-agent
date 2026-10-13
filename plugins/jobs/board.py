@@ -1,11 +1,14 @@
 """后台任务通知的进程内状态：一次结算只被一个回合领取。"""
 from __future__ import annotations
 
-from dataclasses import dataclass
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 
-from .contract import JobOutcome, JobWatch
+from .contract import JobOutcome, JobSnapshot, JobWatch, JobsChangedListener
 
 _WAKE = "wake:"
+_MAX_SETTLED_PER_SESSION = 50
 
 
 @dataclass(slots=True, eq=False)
@@ -25,17 +28,95 @@ class Notice:
 
 
 class JobBoard:
-    """忙时由当前输入领取并在该输入的每一步重放；闲时由唤醒领取。"""
+    """忙时由当前输入领取并在该输入的每一步重放；闲时由唤醒领取；并维护前端可见的任务状态。"""
 
     def __init__(self, max_consecutive_wakes: int | None = None) -> None:
         self._max_wakes = max_consecutive_wakes
         self._notices: list[Notice] = []
         self._wakes: dict[str, tuple[str | None, int]] = {}
+        self._active_jobs: dict[str, JobWatch] = {}
+        self._settled_jobs: dict[str, tuple[JobWatch, JobOutcome, int]] = {}
+        self._listeners: list[JobsChangedListener] = []
+
+    def on_jobs_changed(self, listener: JobsChangedListener) -> Callable[[], None]:
+        self._listeners.append(listener)
+
+        def remove() -> None:
+            if listener in self._listeners:
+                self._listeners.remove(listener)
+
+        return remove
+
+    def _notify(self, session_id: str) -> None:
+        if not self._listeners:
+            return
+        snapshot = self.list_jobs(session_id)
+        for listener in tuple(self._listeners):
+            try:
+                listener(session_id, snapshot)
+            except Exception:
+                pass
+
+    def register(self, job: JobWatch) -> None:
+        if job.started_at is None:
+            job = replace(job, started_at=int(time.time() * 1000))
+        self._active_jobs[job.job_id] = job
+        self._notify(job.session_id)
+
+    def list_jobs(self, session_id: str) -> tuple[JobSnapshot, ...]:
+        active = [
+            JobSnapshot(
+                job_id=job.job_id,
+                kind=job.kind,
+                label=job.label,
+                status="running",
+                detail="",
+                started_at=job.started_at or int(time.time() * 1000),
+                finished_at=None,
+            )
+            for job in self._active_jobs.values()
+            if job.session_id == session_id
+        ]
+        settled = [
+            JobSnapshot(
+                job_id=job.job_id,
+                kind=job.kind,
+                label=job.label,
+                status=outcome.status,
+                detail=outcome.detail,
+                started_at=job.started_at or finished_at,
+                finished_at=finished_at,
+            )
+            for job, outcome, finished_at in self._settled_jobs.values()
+            if job.session_id == session_id
+        ]
+        return tuple(active + settled)
 
     def settle(self, job: JobWatch, outcome: JobOutcome) -> Notice:
+        # 继承在 register 时已固化的 started_at
+        registered = self._active_jobs.pop(job.job_id, None)
+        if registered is not None and registered.started_at is not None:
+            job = replace(job, started_at=registered.started_at)
+        elif job.started_at is None:
+            job = replace(job, started_at=int(time.time() * 1000))
+
         notice = Notice(job, outcome)
         self._notices.append(notice)
+        now_ms = int(time.time() * 1000)
+        self._settled_jobs[job.job_id] = (job, outcome, now_ms)
+        self._prune_settled(job.session_id)
+        self._notify(job.session_id)
         return notice
+
+    def _prune_settled(self, session_id: str) -> None:
+        matching_keys = [
+            job_id for job_id, (item_job, _, _) in self._settled_jobs.items()
+            if item_job.session_id == session_id
+        ]
+        overflow = len(matching_keys) - _MAX_SETTLED_PER_SESSION
+        if overflow > 0:
+            for job_id in matching_keys[:overflow]:
+                self._settled_jobs.pop(job_id, None)
 
     def pending(self, session_id: str) -> tuple[Notice, ...]:
         return tuple(notice for notice in self._notices if notice.job.session_id == session_id)

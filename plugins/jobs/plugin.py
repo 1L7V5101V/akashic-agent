@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -19,7 +19,7 @@ from plugins.reply.contract import REPLY_PROGRAM_V3 as REPLY_PROGRAM
 from plugins.sources.contract import SourceGuard
 
 from .board import JobBoard, Notice
-from .contract import JOB_NOTICES, JobWatch
+from .contract import JOB_NOTICES, JobSnapshot, JobWatch, JobsChangedListener
 
 logger = logging.getLogger(__name__)
 api_version = 3
@@ -62,10 +62,17 @@ class Jobs:
         self._queue: asyncio.Queue[JobWatch] = asyncio.Queue()
 
     def watch(self, job: JobWatch) -> None:
+        self._board.register(job)
         self._queue.put_nowait(job)
 
     def origin_source(self, session_id: str, source: str) -> str:
         return self._board.origin_source(session_id, source)
+
+    def list_jobs(self, session_id: str) -> tuple[JobSnapshot, ...]:
+        return self._board.list_jobs(session_id)
+
+    def on_jobs_changed(self, listener: JobsChangedListener) -> Callable[[], None]:
+        return self._board.on_jobs_changed(listener)
 
     async def run(self) -> None:
         """插件任务持有全部等待者；卸载先取消并排空，再释放运行许可。"""

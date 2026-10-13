@@ -7,12 +7,35 @@ from typing import Literal, Protocol
 
 from agent.plugin_composition import ServiceKey
 
-JobStatus = Literal["completed", "failed", "timeout", "killed"]
+JobOutcomeStatus = Literal["completed", "failed", "timeout", "killed"]
+JobSnapshotStatus = Literal["running", "stopping", "completed", "failed", "timeout", "killed"]
+
+
+@dataclass(frozen=True, slots=True)
+class JobSnapshot:
+    job_id: str
+    kind: str
+    label: str
+    status: JobSnapshotStatus
+    detail: str
+    started_at: int
+    finished_at: int | None = None
+
+    def to_wire(self) -> dict[str, object]:
+        return {
+            "id": self.job_id,
+            "kind": self.kind,
+            "label": self.label,
+            "status": self.status,
+            "detail": self.detail,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+        }
 
 
 @dataclass(frozen=True, slots=True)
 class JobOutcome:
-    status: JobStatus
+    status: JobOutcomeStatus
     detail: str
 
 
@@ -26,6 +49,10 @@ class JobWatch:
     label: str
     collect_hint: str
     settled: Callable[[], Awaitable[JobOutcome | None]]
+    started_at: int | None = None
+
+
+JobsChangedListener = Callable[[str, tuple[JobSnapshot, ...]], None]
 
 
 class JobNotices(Protocol):
@@ -33,6 +60,14 @@ class JobNotices(Protocol):
 
     def origin_source(self, session_id: str, source: str) -> str:
         """当前唤醒可访问登记任务的原来源；其他会话和来源保持原样。"""
+        ...
+
+    def list_jobs(self, session_id: str) -> tuple[JobSnapshot, ...]:
+        """返回指定会话当前可见的完整任务快照。"""
+        ...
+
+    def on_jobs_changed(self, listener: JobsChangedListener) -> Callable[[], None]:
+        """订阅会话级任务快照变化。返回反注册函数。"""
         ...
 
 
