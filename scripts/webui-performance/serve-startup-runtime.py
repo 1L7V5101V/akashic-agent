@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import sqlite3
 import sys
 
@@ -72,6 +73,7 @@ async def run(state: Path, port: int) -> None:
 
     # 2. 不接模型或外部账号；真实 HTTP、插件目录、历史 API 和 WebSocket 仍完整运行。
     app = AppRuntime(Config.load(config, workspace=workspace), workspace)
+    loop = asyncio.get_running_loop()
     try:
         await app.start()
         app.plugin_watcher.stop()
@@ -79,13 +81,20 @@ async def run(state: Path, port: int) -> None:
         print(json.dumps({"origin": f"http://127.0.0.1:{port}", "messagesSha256": before}), flush=True)
         server = uvicorn.Server(uvicorn.Config(create_web_shell_app(workspace), host="127.0.0.1",
                                               port=port, log_level="warning"))
+        # Uvicorn 退出后会重放信号；由本次服务接收，避免取消后续 Runtime 清理。
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, setattr, server, "should_exit", True)
         await server.serve()
     finally:
-        await app.shutdown()
-        after = message_digest(workspace)
-        (state / "integrity.json").write_text(json.dumps({"before": before, "after": after}))
-        if before != after:
-            raise RuntimeError("启动基准改变了消息历史")
+        try:
+            await app.shutdown()
+        finally:
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                loop.remove_signal_handler(sig)
+            after = message_digest(workspace)
+            (state / "integrity.json").write_text(json.dumps({"before": before, "after": after}))
+            if before != after:
+                raise RuntimeError("启动基准改变了消息历史")
 
 
 if __name__ == "__main__":
