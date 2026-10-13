@@ -33,6 +33,10 @@ async def run(state: Path, port: int) -> None:
         destination = plugins / plugin / "static"
         destination.mkdir()
         shutil.copytree(assets, destination / name)
+        # 静态响应使用 Last-Modified；固定年龄，避免刚构建的候选多出启发式缓存重验证。
+        for asset in (destination / name).rglob("*"):
+            if asset.is_file():
+                os.utime(asset, (1767225600, 1767225600))
     for key in tuple(os.environ):
         if key.startswith("AKASHIC_"):
             del os.environ[key]

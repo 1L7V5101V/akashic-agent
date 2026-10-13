@@ -15,6 +15,7 @@
 - Session 固定为 `akashic:startup-benchmark`，消息 ID `startup-000` 到 `startup-099`，正文来自 `serve-startup-runtime.py`。整个爬坡过程复用同一个服务、数据和插件目录；退出时比较完整消息行 SHA-256。
 - Computer 依赖独立 Workload Controller，本基准显式停用它。其余按默认本地组合加载，不用假的 API 成功响应。
 - runtime 开始后停止源码 watcher，避免构建触发换代；只在浏览器采样间替换本次隔离目录中的 dashboard 构建。业务插件与聊天构建保持不变。
+- 静态制品的 mtime 固定为 `1767225600`（2026-01-01 UTC）；否则浏览器的启发式缓存可能让刚构建的候选多出 304 往返。每次替换候选后都重新固定这项输入；此设置只适用于基准副本。
 - 网络参数使用 CDP：`lan` 为 20ms、100Mbps；`latency` 为 600ms、100Mbps；`limited` 为 300ms、4Mbps。上行分别为 100、10、1Mbps。参数表达 CDP 的延迟和吞吐上限，不模拟丢包、运营商路由或 Cloudflare。
 - 源站直接提供未压缩内容。这能隔离依赖等待，但绝对耗时不能当作公网预测。真实公网只作为旁证，不参与接受或拒绝候选的门槛。
 
@@ -60,6 +61,16 @@ node scripts/webui-performance/measure-startup.mjs \
 ```
 
 Runtime 复制插件及前端制品到 `benchmark-state/plugins`。下一轮仅替换 `plugins/ui/static/dashboard`，先保留它的基线副本；不替换权威 workspace 或重新启动 Runtime。测试完对服务发送 SIGINT，检查 `integrity.json` 的 before/after 相同。测试数据与报告保留给评审；脚本不自动删除目录。
+
+替换后的 dashboard 副本用同一时间戳（下例仅指测试目录）：
+
+```python
+import os
+from pathlib import Path
+for path in Path("/absolute/benchmark-state/plugins/ui/static/dashboard").rglob("*"):
+    if path.is_file():
+        os.utime(path, (1767225600, 1767225600))
+```
 
 ## 方案依据
 
