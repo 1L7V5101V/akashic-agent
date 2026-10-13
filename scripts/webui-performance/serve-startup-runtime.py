@@ -78,6 +78,8 @@ async def run(state: Path, port: int) -> None:
         await app.start()
         app.plugin_watcher.stop()
         await app.plugin_watcher_task
+        # 自动扫描停止后仍允许显式 SIGHUP，供独立的真实换代验收使用。
+        app.plugin_watcher = None
         print(json.dumps({"origin": f"http://127.0.0.1:{port}", "messagesSha256": before}), flush=True)
         server = uvicorn.Server(uvicorn.Config(create_web_shell_app(workspace), host="127.0.0.1",
                                               port=port, log_level="warning"))
