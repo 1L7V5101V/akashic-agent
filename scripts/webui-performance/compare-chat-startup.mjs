@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { spawnSync, execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, utimesSync, writeFileSync } from "node:fs";
 import { loadavg } from "node:os";
-import { dirname, resolve, sep } from "node:path";
+import { basename, dirname, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 
 const { values } = parseArgs({ options: {
@@ -14,8 +14,14 @@ const { values } = parseArgs({ options: {
 for (const key of ["url", "browser", "output", "baseline", "candidate", "runtime-chat"]) {
   if (!values[key]) throw new Error(`需要 --${key}`);
 }
-const target = resolve(values["runtime-chat"]), output = resolve(values.output);
-const builds = { baseline: resolve(values.baseline), candidate: resolve(values.candidate) };
+// 校验与后续写入必须针对同一个规范真实路径：词法 resolve() 不解析符号链接。
+const target = realpathSync(resolve(values["runtime-chat"]));
+const builds = {
+  baseline: realpathSync(resolve(values.baseline)),
+  candidate: realpathSync(resolve(values.candidate)),
+};
+// output 尚不存在，先锚定到已存在父目录的真实路径，创建前即可做位置校验。
+const output = resolve(realpathSync(dirname(resolve(values.output))), basename(resolve(values.output)));
 assert.ok(Object.values(builds).every(path => existsSync(resolve(path, "index.html"))));
 
 // 一次性 fixture 身份：目标真实路径必须落在一个由本次运行创建、带隔离标记的
@@ -39,18 +45,14 @@ function findFixtureMarker(start) {
   return null;
 }
 
-const realTarget = realpathSync(target);
-assert.ok(realTarget.endsWith("/plugins/akashic_clients/static/chat"),
-  `runtime-chat 不是聊天静态目录: ${realTarget}`);
-const realBuilds = Object.fromEntries(
-  Object.entries(builds).map(([name, path]) => [name, realpathSync(path)]));
-assert.ok(Object.values(realBuilds).every(path => path !== realTarget),
-  "runtime-chat 不能就是被测构建目录");
-assert.ok(Object.values(realBuilds).every(path => !isInside(realTarget, path) && !isInside(path, realTarget)),
+assert.ok(target.endsWith("/plugins/akashic_clients/static/chat"),
+  `runtime-chat 不是聊天静态目录: ${target}`);
+assert.ok(Object.values(builds).every(path => path !== target), "runtime-chat 不能就是被测构建目录");
+assert.ok(Object.values(builds).every(path => !isInside(target, path) && !isInside(path, target)),
   "runtime-chat 与被测构建目录不得互相嵌套");
 
-const marker = findFixtureMarker(realTarget);
-assert.ok(marker, `缺少一次性 fixture 隔离标记 ${FIXTURE_MARKER}: ${realTarget}`);
+const marker = findFixtureMarker(target);
+assert.ok(marker, `缺少一次性 fixture 隔离标记 ${FIXTURE_MARKER}: ${target}`);
 let fixture;
 try {
   fixture = JSON.parse(readFileSync(marker, "utf8"));
@@ -58,19 +60,47 @@ try {
   throw new Error(`隔离标记不可读: ${marker}: ${error.message}`);
 }
 assert.equal(fixture.kind, "akashic-webui-oneoff", "隔离标记类型不符");
-assert.ok(typeof fixture.workspace === "string" && fixture.workspace, "隔离标记缺少 workspace");
-assert.ok(isInside(realTarget, realpathSync(fixture.workspace)),
-  `runtime-chat 不属于该隔离标记声明的 workspace: ${realTarget}`);
+for (const key of ["state", "workspace", "chat"]) {
+  assert.ok(typeof fixture[key] === "string" && fixture[key], `隔离标记缺少 ${key}`);
+}
+// 资产根是 state/plugins 下的 chat 目录，与消息 workspace 不是同一个根；必须由 fixture
+// 直接发布实际允许写入的 chat 目录并精确比对，不能用「某个祖先包含目标」代替。
+assert.equal(realpathSync(fixture.chat), target, "隔离标记声明的 chat 目录与目标不一致");
+assert.ok(isInside(target, realpathSync(fixture.state)), "目标不在标记声明的 state 内");
+assert.ok(isInside(realpathSync(fixture.workspace), realpathSync(fixture.state)),
+  "标记的 workspace 不在 state 内");
+
+// 运行绑定：marker 是自我声明，不能自己证明自己。这里独立读活跃进程命令行，并要求
+// --url 指向该 fixture 声明的端口，避免把别的服务或旧 fixture 纳入写入型实验。
+assert.ok(Number.isSafeInteger(fixture.pid) && fixture.pid > 0, "隔离标记缺少 pid");
+assert.ok(Number.isSafeInteger(fixture.port) && fixture.port > 0, "隔离标记缺少 port");
+let processes;
+try {
+  processes = readFileSync(`/proc/${fixture.pid}/cmdline`, "utf8").split("\0").filter(Boolean);
+} catch {
+  throw new Error(`一次性 fixture 进程不存在或不可读: pid ${fixture.pid}`);
+}
+const ownsState = processes.some(token => {
+  try {
+    return existsSync(token) && realpathSync(token) === realpathSync(fixture.state);
+  } catch {
+    return false;
+  }
+});
+assert.ok(ownsState, `活跃进程 ${fixture.pid} 的命令行未引用该 fixture state`);
+const origin = `http://127.0.0.1:${fixture.port}`;
+assert.ok(values.url === origin || values.url.startsWith(`${origin}/`),
+  `--url 必须指向本次 fixture 的地址 ${origin}`);
 const profiles = values.profiles.split(","), runs = Number(values.runs);
 assert.ok(Number.isSafeInteger(runs) && runs > 0);
 assert.ok(profiles.every(name => ["lan", "latency", "limited"].includes(name)));
-mkdirSync(output, { recursive: false });
-// 恢复目的地同样受隔离约束：不得与目标或被测构建目录互相嵌套。
-const realOutput = realpathSync(output);
-assert.ok(!isInside(realOutput, realTarget) && !isInside(realTarget, realOutput),
+// 创建前先校验预期位置：被拒绝时不得在目标或被测目录留下任何副作用。
+assert.ok(!existsSync(output), `output 必须是不存在的新目录: ${output}`);
+assert.ok(!isInside(output, target) && !isInside(target, output),
   "output 目录不得与 runtime-chat 互相嵌套");
-assert.ok(Object.values(realBuilds).every(path => !isInside(realOutput, path) && !isInside(path, realOutput)),
+assert.ok(Object.values(builds).every(path => !isInside(output, path) && !isInside(path, output)),
   "output 目录不得与被测构建目录互相嵌套");
+mkdirSync(output, { recursive: false });
 const recovery = resolve(output, "starting-chat");
 cpSync(target, recovery, { recursive: true });
 const report = { plannedSamples: runs * profiles.length * 4, complete: false, builds, target,

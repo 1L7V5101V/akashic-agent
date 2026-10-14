@@ -56,10 +56,18 @@ async def run(state: Path, port: int) -> None:
 
     workspace, config = state / "workspace", state / "config.toml"
     init_workspace(config_path=config, workspace=workspace)
-    # 隔离标记：写入型基准脚本 compare-chat-startup.mjs 在 rsync --delete 之前
-    # 据此证明目标属于本次一次性 fixture，而不是正式目录或其符号链接。
+    # 隔离标记：写入型基准脚本 compare-chat-startup.mjs 在 rsync --delete 之前据此证明
+    # 目标属于本次一次性 fixture。资产根是 state/plugins 下的 chat 目录，与消息 workspace
+    # 不同根，因此必须分别发布；pid/port 供比较脚本独立核对活跃服务归属。
     (state / ".akashic-oneoff-fixture.json").write_text(
-        json.dumps({"kind": "akashic-webui-oneoff", "workspace": str(workspace.resolve())}),
+        json.dumps({
+            "kind": "akashic-webui-oneoff",
+            "state": str(state.resolve()),
+            "workspace": str(workspace.resolve()),
+            "chat": str((plugins / "akashic_clients" / "static" / "chat").resolve()),
+            "pid": os.getpid(),
+            "port": port,
+        }, ensure_ascii=False),
         encoding="utf-8",
     )
     # Computer 需要独立 Workload Controller；本基准只测 Web 启动与历史阅读。
