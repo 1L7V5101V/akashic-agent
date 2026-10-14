@@ -147,19 +147,24 @@ let ready = false;
 const deadline = Date.now() + 30000;
 while (Date.now() < deadline) {
   const remaining = deadline - Date.now();
+  if (remaining <= 0) break;
   try {
     const response = await fetch(health, {
       redirect: "manual",
-      signal: AbortSignal.timeout(Math.max(1, Math.min(2000, remaining))),
+      signal: AbortSignal.timeout(Math.min(2000, remaining)),
     });
     if (response.status === 200) {
       const payload = await response.json();
-      if (payload?.status === "ready") { ready = true; break; }
+      if (Date.now() < deadline && payload?.status === "ready") { ready = true; break; }
+    } else {
+      await response.body?.cancel();
     }
   } catch {
     // 尚未监听、单次超时或响应不是 JSON，继续等。
   }
-  await new Promise(resolve_ => setTimeout(resolve_, 500));
+  const pause = deadline - Date.now();
+  if (pause <= 0) break;
+  await new Promise(resolve_ => setTimeout(resolve_, Math.min(500, pause)));
 }
 assert.ok(ready, `fixture 未在 30 秒内就绪（${health} 未返回 status=ready）：${origin}`);
 // 等待期间监听关系可能变化，就绪后再核对一次归属。
