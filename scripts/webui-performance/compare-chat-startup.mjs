@@ -1,9 +1,9 @@
 /** 交错切换真实聊天制品，按相邻冷/热样本比较，降低宿主负载漂移的影响。 */
 import assert from "node:assert/strict";
 import { spawnSync, execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, utimesSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, utimesSync, writeFileSync } from "node:fs";
 import { loadavg } from "node:os";
-import { resolve } from "node:path";
+import { dirname, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 
 const { values } = parseArgs({ options: {
@@ -15,13 +15,62 @@ for (const key of ["url", "browser", "output", "baseline", "candidate", "runtime
   if (!values[key]) throw new Error(`需要 --${key}`);
 }
 const target = resolve(values["runtime-chat"]), output = resolve(values.output);
-assert.ok(target.endsWith("/plugins/akashic_clients/static/chat"));
 const builds = { baseline: resolve(values.baseline), candidate: resolve(values.candidate) };
-assert.ok(Object.values(builds).every(path => path !== target && existsSync(resolve(path, "index.html"))));
+assert.ok(Object.values(builds).every(path => existsSync(resolve(path, "index.html"))));
+
+// 一次性 fixture 身份：目标真实路径必须落在一个由本次运行创建、带隔离标记的
+// workspace 内，并且与任何被测构建目录不相同、不互相嵌套。目录名后缀或
+// localhost 都不构成隔离证明；resolve() 是词法解析，不解析符号链接。
+const FIXTURE_MARKER = ".akashic-oneoff-fixture.json";
+
+function isInside(child, parent) {
+  return child === parent || child.startsWith(parent + sep);
+}
+
+function findFixtureMarker(start) {
+  let directory = start;
+  for (let depth = 0; depth < 8; depth += 1) {
+    const candidate = resolve(directory, FIXTURE_MARKER);
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(directory);
+    if (parent === directory) break;
+    directory = parent;
+  }
+  return null;
+}
+
+const realTarget = realpathSync(target);
+assert.ok(realTarget.endsWith("/plugins/akashic_clients/static/chat"),
+  `runtime-chat 不是聊天静态目录: ${realTarget}`);
+const realBuilds = Object.fromEntries(
+  Object.entries(builds).map(([name, path]) => [name, realpathSync(path)]));
+assert.ok(Object.values(realBuilds).every(path => path !== realTarget),
+  "runtime-chat 不能就是被测构建目录");
+assert.ok(Object.values(realBuilds).every(path => !isInside(realTarget, path) && !isInside(path, realTarget)),
+  "runtime-chat 与被测构建目录不得互相嵌套");
+
+const marker = findFixtureMarker(realTarget);
+assert.ok(marker, `缺少一次性 fixture 隔离标记 ${FIXTURE_MARKER}: ${realTarget}`);
+let fixture;
+try {
+  fixture = JSON.parse(readFileSync(marker, "utf8"));
+} catch (error) {
+  throw new Error(`隔离标记不可读: ${marker}: ${error.message}`);
+}
+assert.equal(fixture.kind, "akashic-webui-oneoff", "隔离标记类型不符");
+assert.ok(typeof fixture.workspace === "string" && fixture.workspace, "隔离标记缺少 workspace");
+assert.ok(isInside(realTarget, realpathSync(fixture.workspace)),
+  `runtime-chat 不属于该隔离标记声明的 workspace: ${realTarget}`);
 const profiles = values.profiles.split(","), runs = Number(values.runs);
 assert.ok(Number.isSafeInteger(runs) && runs > 0);
 assert.ok(profiles.every(name => ["lan", "latency", "limited"].includes(name)));
 mkdirSync(output, { recursive: false });
+// 恢复目的地同样受隔离约束：不得与目标或被测构建目录互相嵌套。
+const realOutput = realpathSync(output);
+assert.ok(!isInside(realOutput, realTarget) && !isInside(realTarget, realOutput),
+  "output 目录不得与 runtime-chat 互相嵌套");
+assert.ok(Object.values(realBuilds).every(path => !isInside(realOutput, path) && !isInside(path, realOutput)),
+  "output 目录不得与被测构建目录互相嵌套");
 const recovery = resolve(output, "starting-chat");
 cpSync(target, recovery, { recursive: true });
 const report = { plannedSamples: runs * profiles.length * 4, complete: false, builds, target,
