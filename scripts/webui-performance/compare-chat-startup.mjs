@@ -92,34 +92,56 @@ const origin = `http://127.0.0.1:${fixture.port}`;
 assert.ok(values.url === origin || values.url.startsWith(`${origin}/`),
   `--url 必须指向本次 fixture 的地址 ${origin}`);
 
-// 端口归属：marker 声明的 pid 必须是实际监听该端口的进程。命令行核对只说明进程存在，
-// 不能说明被测地址由它提供；这里读当前监听表，独立于 marker 的自我声明。
-function listenerPids(port) {
+// 端口归属：必须按被测地址的族与本地地址核对。只按端口汇总 pid 无法区分
+// 127.0.0.1 / ::1 / 0.0.0.0，也就无法证明"这个 URL 由该 fixture 提供"。
+function listenerPids(host, port) {
   let table;
   try {
     table = execFileSync("ss", ["-ltnpH", `sport = :${port}`], { encoding: "utf8" });
   } catch {
     throw new Error("无法读取监听表（需要 ss）");
   }
-  return new Set([...table.matchAll(/pid=(\d+)/g)].map(match => Number(match[1])));
+  const ipv6 = host.includes(":");
+  const wanted = ipv6 ? `[${host}]` : host;
+  const wildcard = ipv6 ? "[::]" : "0.0.0.0";
+  const pids = new Set();
+  for (const line of table.split("\n")) {
+    const columns = line.trim().split(/\s+/);
+    if (columns.length < 5) continue;
+    const local = columns[3];
+    const separator = local.lastIndexOf(":");
+    if (separator <= 0) continue;
+    if (Number(local.slice(separator + 1)) !== port) continue;
+    const address = local.slice(0, separator);
+    if (address !== wanted && address !== wildcard) continue;
+    for (const match of line.matchAll(/pid=(\d+)/g)) pids.add(Number(match[1]));
+  }
+  return pids;
 }
-const listeners = listenerPids(fixture.port);
-assert.ok(listeners.has(fixture.pid),
-  `端口 ${fixture.port} 的监听进程不是该 fixture（实测 pid ${[...listeners].join(",") || "无"}，声明 ${fixture.pid}）`);
+const host = new URL(origin).hostname;
+function assertListenerOwned(stage) {
+  const listeners = listenerPids(host, fixture.port);
+  assert.ok(listeners.has(fixture.pid),
+    `${stage}：${host}:${fixture.port} 的监听进程不是该 fixture（实测 ${[...listeners].join(",") || "无"}，声明 ${fixture.pid}）`);
+}
+assertListenerOwned("写入前");
 
-// 就绪门：启动未完成就写入资产会把"还没起来"记成性能结果。
+// 就绪门：启动未完成就写入资产会把"还没起来"记成性能结果。每次请求带超时，保证
+// 30 秒上限真的成立；只有真正提供页面（<400）才算就绪，404/403 不算。
 let ready = false;
 const deadline = Date.now() + 30000;
 while (Date.now() < deadline) {
   try {
-    const response = await fetch(origin);
-    if (response.status < 500) { ready = true; break; }
+    const response = await fetch(origin, { signal: AbortSignal.timeout(2000) });
+    if (response.status < 400) { ready = true; break; }
   } catch {
-    // 尚未监听，继续等。
+    // 尚未监听或单次超时，继续等。
   }
   await new Promise(resolve_ => setTimeout(resolve_, 500));
 }
 assert.ok(ready, `fixture 未在 30 秒内就绪：${origin}`);
+// 等待期间监听关系可能变化，就绪后再核对一次归属。
+assertListenerOwned("就绪后");
 const profiles = values.profiles.split(","), runs = Number(values.runs);
 assert.ok(Number.isSafeInteger(runs) && runs > 0);
 assert.ok(profiles.every(name => ["lan", "latency", "limited"].includes(name)));
