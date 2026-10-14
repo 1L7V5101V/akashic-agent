@@ -91,6 +91,35 @@ assert.ok(ownsState, `活跃进程 ${fixture.pid} 的命令行未引用该 fixtu
 const origin = `http://127.0.0.1:${fixture.port}`;
 assert.ok(values.url === origin || values.url.startsWith(`${origin}/`),
   `--url 必须指向本次 fixture 的地址 ${origin}`);
+
+// 端口归属：marker 声明的 pid 必须是实际监听该端口的进程。命令行核对只说明进程存在，
+// 不能说明被测地址由它提供；这里读当前监听表，独立于 marker 的自我声明。
+function listenerPids(port) {
+  let table;
+  try {
+    table = execFileSync("ss", ["-ltnpH", `sport = :${port}`], { encoding: "utf8" });
+  } catch {
+    throw new Error("无法读取监听表（需要 ss）");
+  }
+  return new Set([...table.matchAll(/pid=(\d+)/g)].map(match => Number(match[1])));
+}
+const listeners = listenerPids(fixture.port);
+assert.ok(listeners.has(fixture.pid),
+  `端口 ${fixture.port} 的监听进程不是该 fixture（实测 pid ${[...listeners].join(",") || "无"}，声明 ${fixture.pid}）`);
+
+// 就绪门：启动未完成就写入资产会把"还没起来"记成性能结果。
+let ready = false;
+const deadline = Date.now() + 30000;
+while (Date.now() < deadline) {
+  try {
+    const response = await fetch(origin);
+    if (response.status < 500) { ready = true; break; }
+  } catch {
+    // 尚未监听，继续等。
+  }
+  await new Promise(resolve_ => setTimeout(resolve_, 500));
+}
+assert.ok(ready, `fixture 未在 30 秒内就绪：${origin}`);
 const profiles = values.profiles.split(","), runs = Number(values.runs);
 assert.ok(Number.isSafeInteger(runs) && runs > 0);
 assert.ok(profiles.every(name => ["lan", "latency", "limited"].includes(name)));
