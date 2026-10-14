@@ -75,14 +75,22 @@ assert.ok(isInside(realpathSync(fixture.workspace), realpathSync(fixture.state))
 assert.ok(Number.isSafeInteger(fixture.pid) && fixture.pid > 0, "隔离标记缺少 pid");
 assert.ok(Number.isSafeInteger(fixture.port) && fixture.port > 0, "隔离标记缺少 port");
 let processes;
+let fixtureCwd;
 try {
   processes = readFileSync(`/proc/${fixture.pid}/cmdline`, "utf8").split("\0").filter(Boolean);
+  fixtureCwd = realpathSync(`/proc/${fixture.pid}/cwd`);
 } catch {
   throw new Error(`一次性 fixture 进程不存在或不可读: pid ${fixture.pid}`);
 }
+const stateReal = realpathSync(fixture.state);
+// 正常启动形式包括 `--state /abs`、`--state=/abs` 和相对路径。相对值必须按被检查
+// 进程自己的 cwd 解析，不能按本脚本的 cwd，否则会把正常命令误拒。
 const ownsState = processes.some(token => {
+  const value = token.startsWith("--state=") ? token.slice("--state=".length) : token;
+  if (!value || value.startsWith("-")) return false;
   try {
-    return existsSync(token) && realpathSync(token) === realpathSync(fixture.state);
+    const candidate = resolve(fixtureCwd, value);
+    return existsSync(candidate) && realpathSync(candidate) === stateReal;
   } catch {
     return false;
   }
@@ -94,7 +102,7 @@ assert.ok(values.url === origin || values.url.startsWith(`${origin}/`),
 
 // 端口归属：必须按被测地址的族与本地地址核对。只按端口汇总 pid 无法区分
 // 127.0.0.1 / ::1 / 0.0.0.0，也就无法证明"这个 URL 由该 fixture 提供"。
-function listenerPids(host, port) {
+function listenerOwners(host, port) {
   let table;
   try {
     table = execFileSync("ss", ["-ltnpH", `sport = :${port}`], { encoding: "utf8" });
@@ -105,6 +113,7 @@ function listenerPids(host, port) {
   const wanted = ipv6 ? `[${host}]` : host;
   const wildcard = ipv6 ? "[::]" : "0.0.0.0";
   const pids = new Set();
+  let unknown = false;
   for (const line of table.split("\n")) {
     const columns = line.trim().split(/\s+/);
     if (columns.length < 5) continue;
@@ -114,32 +123,45 @@ function listenerPids(host, port) {
     if (Number(local.slice(separator + 1)) !== port) continue;
     const address = local.slice(0, separator);
     if (address !== wanted && address !== wildcard) continue;
-    for (const match of line.matchAll(/pid=(\d+)/g)) pids.add(Number(match[1]));
+    const matches = [...line.matchAll(/pid=(\d+)/g)].map(match => Number(match[1]));
+    if (!matches.length) unknown = true;   // 该端点有人监听，但拿不到 pid
+    for (const pid of matches) pids.add(pid);
   }
-  return pids;
+  return { pids, unknown };
 }
 const host = new URL(origin).hostname;
 function assertListenerOwned(stage) {
-  const listeners = listenerPids(host, fixture.port);
-  assert.ok(listeners.has(fixture.pid),
-    `${stage}：${host}:${fixture.port} 的监听进程不是该 fixture（实测 ${[...listeners].join(",") || "无"}，声明 ${fixture.pid}）`);
+  const { pids, unknown } = listenerOwners(host, fixture.port);
+  const owners = [...pids];
+  assert.ok(!unknown, `${stage}：${host}:${fixture.port} 存在无法识别归属的监听者`);
+  assert.ok(owners.length === 1 && owners[0] === fixture.pid,
+    `${stage}：${host}:${fixture.port} 的监听者必须唯一且是该 fixture（实测 ${owners.join(",") || "无"}，声明 ${fixture.pid}）`);
 }
 assertListenerOwned("写入前");
 
-// 就绪门：启动未完成就写入资产会把"还没起来"记成性能结果。每次请求带超时，保证
-// 30 秒上限真的成立；只有真正提供页面（<400）才算就绪，404/403 不算。
+// 就绪门：启动未完成就写入资产会把"还没起来"记成性能结果。就绪必须由真实健康接口确认
+// ——/api/chat/health 只有在消息目录能打开时才返回 {"status":"ready"}；只看"有响应"会把
+// 404/403 甚至别的服务当成就绪。禁用手动跳转，避免被 3xx 引到别处。
+const health = `${origin}/api/chat/health`;
 let ready = false;
 const deadline = Date.now() + 30000;
 while (Date.now() < deadline) {
+  const remaining = deadline - Date.now();
   try {
-    const response = await fetch(origin, { signal: AbortSignal.timeout(2000) });
-    if (response.status < 400) { ready = true; break; }
+    const response = await fetch(health, {
+      redirect: "manual",
+      signal: AbortSignal.timeout(Math.max(1, Math.min(2000, remaining))),
+    });
+    if (response.status === 200) {
+      const payload = await response.json();
+      if (payload?.status === "ready") { ready = true; break; }
+    }
   } catch {
-    // 尚未监听或单次超时，继续等。
+    // 尚未监听、单次超时或响应不是 JSON，继续等。
   }
   await new Promise(resolve_ => setTimeout(resolve_, 500));
 }
-assert.ok(ready, `fixture 未在 30 秒内就绪：${origin}`);
+assert.ok(ready, `fixture 未在 30 秒内就绪（${health} 未返回 status=ready）：${origin}`);
 // 等待期间监听关系可能变化，就绪后再核对一次归属。
 assertListenerOwned("就绪后");
 const profiles = values.profiles.split(","), runs = Number(values.runs);
@@ -162,6 +184,8 @@ const reports = new Map(), artifacts = {}, rows = [];
 let frozen;
 
 function copyBuild(source) {
+  // 每次替换资产前重新核对归属：等待、采样与上一轮之间监听关系都可能变化。
+  assertListenerOwned(`替换前 ${source}`);
   execFileSync("rsync", ["-a", "--delete", `${source}/`, `${target}/`]);
   function normalize(directory) {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
