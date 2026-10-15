@@ -1097,6 +1097,22 @@ input {
   background: color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent);
 }
 
+:root {
+  /* 抽屉遮罩只压暗、不提亮：用主题的阴影色 --ak-color-shadow（深色主题是黑），不能用墨色——深色下墨色是浅色，会把背景刷灰。
+     深色底本身暗，需要更高的不透明度才看得出层级；不支持 light-dark() 的浏览器统一 28%。
+     自定义属性不做语法校验，回退必须用 @supports，不能靠重复声明。 */
+  --chat-scrim: color-mix(in srgb, var(--ak-color-shadow) 28%, transparent);
+}
+
+@supports (color: light-dark(#000, #fff)) {
+  :root {
+    --chat-scrim: light-dark(
+      color-mix(in srgb, var(--ak-color-shadow) 22%, transparent),
+      color-mix(in srgb, var(--ak-color-shadow) 45%, transparent)
+    );
+  }
+}
+
 .chat-main {
   --chat-concept-columns: minmax(5.6rem, 0.38fr) minmax(0, 1fr);
   --chat-response-leading: 1.5;
@@ -1959,7 +1975,7 @@ form.composer:focus-within [data-slot="input-group"] {
   }
 
   .compact-navigation-overlay {
-    background-color: color-mix(in oklch, var(--ak-ink-primary) 22%, transparent);
+    background-color: var(--chat-scrim);
     backdrop-filter: blur(3px);
   }
 
@@ -2835,7 +2851,7 @@ form.composer:focus-within [data-slot="input-group"] {
     inset: 0;
     z-index: 79;
     display: block;
-    background: color-mix(in srgb, var(--ak-ink-primary) 22%, transparent);
+    background: var(--chat-scrim);
     animation: picker-scrim-in 180ms ease-out;
   }
 
