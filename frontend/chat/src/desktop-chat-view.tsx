@@ -427,6 +427,8 @@ function SessionHeadingTitle({ heading, value, onRename }: {
     aria-label="重命名会话"
     onChange={(event) => setDraft(event.target.value)}
     onKeyDown={(event) => {
+      // 输入法组合中的回车、Esc 属于输入法，不提交也不放弃编辑。
+      if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
       if (event.key === "Enter") {
         event.preventDefault();
         void commit();

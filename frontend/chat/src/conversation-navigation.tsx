@@ -299,6 +299,8 @@ export function ConversationSessionRow({ session, pendingSessionId, onActivate, 
           disabled={renameBusy}
           onChange={(event) => setRenameValue(event.target.value)}
           onKeyDown={(event) => {
+            // 输入法组合中的回车是确认候选词、Esc 是取消候选，都不属于编辑框（Safari 只剩 keyCode 229 可辨认）。
+            if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
             if (event.key === "Enter") {
               event.preventDefault();
               void commitRename();
