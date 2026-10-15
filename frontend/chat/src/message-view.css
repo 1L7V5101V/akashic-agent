@@ -1693,6 +1693,7 @@ button.tool-step-summary:active {
   border: 0; padding: 4px 2px; color: var(--ak-ink-primary); background: none; font: inherit;
   text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
 }
+.connection-status button:focus-visible { outline: 2px solid var(--ak-rule-focus); outline-offset: 2px; border-radius: 4px; }
 @keyframes connection-breathe { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .connection-status > i { animation: none; } }
 .timeline-control-summary strong, .timeline-result-heading strong { font-size: 0.875rem; }

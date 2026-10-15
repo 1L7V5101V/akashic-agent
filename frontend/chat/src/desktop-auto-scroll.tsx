@@ -363,8 +363,18 @@ interface ReadingPosition {
   offset: number;
 }
 
-// 本标签页内每个会话读到哪里；贴近底部时不记，回来照常贴底。
+// 本标签页内每个会话读到哪里；贴近底部时不记，回来照常贴底。按最近使用保留 50 个会话，删掉的会话自然淘汰。
 const readingPositions = new Map<string, ReadingPosition>();
+const READING_POSITIONS_LIMIT = 50;
+
+function rememberReading(sessionId: string, position: ReadingPosition): void {
+  readingPositions.delete(sessionId);
+  readingPositions.set(sessionId, position);
+  if (readingPositions.size > READING_POSITIONS_LIMIT) {
+    const oldest = readingPositions.keys().next().value;
+    if (oldest !== undefined) readingPositions.delete(oldest);
+  }
+}
 
 // 阅读区顶缘下的第一条消息：用 elementFromPoint 取，不逐条扫描；落在消息间隙时往下多探两次。
 function readingPosition(scroller: HTMLElement): ReadingPosition | null {
@@ -381,6 +391,8 @@ function readingPosition(scroller: HTMLElement): ReadingPosition | null {
 export function SessionReadingMemory({ sessionId, ready }: { sessionId: string; ready: string }) {
   const { scrollRef, stopScroll } = useStickToBottomContext();
   const restoringRef = useRef<ReadingPosition | null>(null);
+  // 逐帧恢复进行中：压回位置产生的滚动不是用户在读，不能记成阅读位置。
+  const applyingRef = useRef(false);
 
   // 必要 effect：切换会话时取出该会话的阅读位置，等消息就绪后再恢复；恢复前不记录
   useLayoutEffect(() => {
@@ -392,7 +404,9 @@ export function SessionReadingMemory({ sessionId, ready }: { sessionId: string; 
     const target = restoringRef.current;
     if (!target || !ready) return;
     restoringRef.current = null;
-    // 1. 切换会话时滚动区会重新挂载，子组件的 layout effect 早于新滚动区的 ref 绑定；每帧重新取滚动区与锚点。
+    applyingRef.current = true;
+    // 1. 会话之间切换时滚动区是同一个节点；从首页（还没有对话区）切回时它才挂载，ref 与目标消息都可能晚一帧出现。
+    //    每帧重新取滚动区与锚点，找不到就等下一帧，不立即放弃。
     const find = () => {
       const scroller = scrollRef.current;
       const anchor = scroller?.isConnected
@@ -406,26 +420,36 @@ export function SessionReadingMemory({ sessionId, ready }: { sessionId: string; 
     const onInput = () => { touched = true; };
     const inputs = ["wheel", "touchmove", "keydown", "pointerdown"] as const;
     inputs.forEach((type) => window.addEventListener(type, onInput, { passive: true, capture: true }));
-    const finish = () => inputs.forEach((type) => window.removeEventListener(type, onInput, { capture: true }));
-    const step = () => {
-      const found = cancelled || touched ? null : find();
-      if (!found) return finish();
-      // 3. 第一次找到锚点时离开贴底跟随，之后的内容增长不再把视图拉回底部。
-      if (frames === 0) stopScroll();
-      const delta = found.anchor.getBoundingClientRect().top - found.scroller.getBoundingClientRect().top - target.offset;
-      if (Math.abs(delta) > 1) found.scroller.scrollTop += delta;
-      frames += 1;
-      if (frames < 20) window.requestAnimationFrame(step);
-      else finish();
+    let located = false;
+    let frame = 0;
+    const finish = () => {
+      applyingRef.current = false;
+      inputs.forEach((type) => window.removeEventListener(type, onInput, { capture: true }));
     };
-    const first = window.requestAnimationFrame(step);
+    const step = () => {
+      frame = 0;
+      // 3. 用户一有输入就把滚动交还给用户；最多尝试 20 帧。
+      if (cancelled || touched || frames >= 20) return finish();
+      frames += 1;
+      const found = find();
+      if (found) {
+        // 4. 第一次找到锚点时离开贴底跟随，之后的内容增长不再把视图拉回底部。
+        if (!located) stopScroll();
+        located = true;
+        const delta = found.anchor.getBoundingClientRect().top - found.scroller.getBoundingClientRect().top - target.offset;
+        if (Math.abs(delta) > 1) found.scroller.scrollTop += delta;
+      }
+      frame = window.requestAnimationFrame(step);
+    };
+    frame = window.requestAnimationFrame(step);
     return () => {
       cancelled = true;
-      window.cancelAnimationFrame(first);
+      window.cancelAnimationFrame(frame);
+      finish();
     };
   }, [ready, scrollRef, stopScroll]);
 
-  // 必要 effect：随滚动记录阅读位置（合并到每帧一次）；恢复尚未完成时不覆盖。
+  // 必要 effect：随滚动记录阅读位置（合并到每帧一次）；等待恢复与逐帧恢复期间都不覆盖。
   // 切换期间旧消息被清空时会话 id 可能还没变；只在消息确实属于当前会话（ready）时记录，免得清空引起的滚动抹掉旧位置。
   useEffect(() => {
     const scroller = scrollRef.current;
@@ -433,10 +457,10 @@ export function SessionReadingMemory({ sessionId, ready }: { sessionId: string; 
     let frame = 0;
     const record = () => {
       frame = 0;
-      if (restoringRef.current) return;
+      if (restoringRef.current || applyingRef.current) return;
       const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
       const position = gap > 80 ? readingPosition(scroller) : null;
-      if (position?.id) readingPositions.set(sessionId, position);
+      if (position?.id) rememberReading(sessionId, position);
       else if (gap <= 80) readingPositions.delete(sessionId);
     };
     const onScroll = () => { if (!frame) frame = window.requestAnimationFrame(record); };
