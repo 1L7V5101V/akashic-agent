@@ -38,6 +38,12 @@ input {
   font: inherit;
 }
 
+/* 等宽字体（JetBrains Mono）默认开上下文连字，>= != -> 会画成 ≥ ≠ →，看到的和复制出来的不一样。
+   聊天里读代码以字面为准，所有等宽场景关掉连字；高亮组件在 shadow DOM 里，靠宿主继承。 */
+:where(code, pre, kbd, samp, diffs-container, .font-mono) {
+  font-variant-ligatures: none;
+}
+
 .webui-entry-loading {
   display: grid;
   width: 100%;
