@@ -325,6 +325,58 @@ input {
   background: color-mix(in oklch, var(--md-sys-color-on-surface) 8%, transparent);
 }
 
+/* 主题行右端的键盘图标：只在有键盘与指针的宽屏出现，触屏不占位。 */
+.chat-sidebar__footer-row { display: flex; align-items: center; gap: 2px; }
+.chat-sidebar__footer-row > .chat-sidebar__action { min-width: 0; flex: 1 1 auto; }
+.chat-sidebar__shortcuts { display: none; }
+
+@media (hover: hover) and (pointer: fine) {
+  .chat-sidebar__shortcuts {
+    display: inline-grid;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 0;
+    border-radius: 8px;
+    padding: 0;
+    color: var(--chat-faint, var(--chat-muted));
+    background: transparent;
+    cursor: pointer;
+  }
+  .chat-sidebar__shortcuts:hover { color: var(--chat-ink); background: color-mix(in oklch, var(--ak-ink-primary) 6%, transparent); }
+  .chat-sidebar__shortcuts:focus-visible { outline: 2px solid var(--ak-rule-focus); outline-offset: 2px; }
+}
+
+/* 快捷键表：左说明右按键，按键是发丝线小方块，不用彩色胶囊。 */
+.shortcuts-dialog { gap: 20px; }
+.shortcuts-dialog section { display: grid; gap: 6px; }
+.shortcuts-dialog h3 { margin: 0; color: var(--chat-muted); font-size: var(--chat-type-caption, 0.75rem); font-weight: 500; }
+.shortcuts-dialog dl { display: grid; margin: 0; }
+.shortcuts-dialog dl > div {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-block-end: 1px solid var(--ak-rule-subtle);
+}
+.shortcuts-dialog dl > div:last-child { border-block-end: 0; }
+.shortcuts-dialog dt { color: var(--ak-ink-primary); font-size: var(--chat-type-control, 0.875rem); }
+.shortcuts-dialog dd { display: flex; flex: 0 0 auto; gap: 4px; margin: 0; }
+.shortcuts-dialog kbd {
+  min-width: 1.75rem;
+  padding: 2px 6px;
+  border: 1px solid var(--ak-rule-default);
+  border-radius: 5px;
+  color: var(--ak-ink-secondary, var(--chat-muted));
+  background: var(--ak-paper-canvas);
+  font-family: var(--ak-type-technical);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
 /* 搜索命中只换墨色并加粗下划线，不铺底色块，列表仍然安静。 */
 ::highlight(sidebar-search) {
   color: var(--ak-ink-primary);
