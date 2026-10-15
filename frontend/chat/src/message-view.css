@@ -281,7 +281,7 @@
   font-size: 12px !important;
   font-weight: 400;
   line-height: 18px !important;
-  white-space: pre-wrap;
+  white-space: pre;
 }
 
 /* 高亮组件加载期间，块头下面先放一个同样的 <pre> 占位：它已经在块里，不再自带块头留白与边框，
@@ -297,7 +297,7 @@
   font-size: 12px !important;
   font-weight: 400;
   line-height: 18px !important;
-  white-space: pre-wrap;
+  white-space: pre;
 }
 
 /* GFM 任务列表：勾选框自带语义，去掉重复的 disc 标记。 */
