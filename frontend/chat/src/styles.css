@@ -44,6 +44,12 @@ input {
   font-variant-ligatures: none;
 }
 
+/* 选区跟随主色的淡底、保留原文字色：浏览器默认的亮蓝白字在纸面上太刺眼。 */
+::selection {
+  background: color-mix(in oklch, var(--ak-rule-focus) 22%, transparent);
+  color: inherit;
+}
+
 .webui-entry-loading {
   display: grid;
   width: 100%;
