@@ -2950,6 +2950,8 @@ form.composer:focus-within [data-slot="input-group"] {
   .chat-main,
   :root[data-embedded-shell="true"] .chat-main { overflow-y: auto; }
   .chat-main .conversation { flex: none; block-size: max(120px, 60dvh); }
+  /* 输入区已在文档流里，不再浮在消息上：底部不必再给它预留一张卡的高度，矮屏每一行都要省。 */
+  .chat-main .conversation-content { padding-block-end: 1rem; }
   .chat-main .composer-wrap,
   .chat-main .composer-wrap.home { position: relative; inset: auto; inline-size: auto; flex: none; margin: 8px var(--chat-dock-inset); }
   .chat-main .composer-wrap::before { display: none; }
