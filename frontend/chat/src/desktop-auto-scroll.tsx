@@ -1,5 +1,5 @@
 import { ArrowDown } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useStickToBottomContext } from "use-stick-to-bottom";
 
 import type { ChatMessage } from "./chat-message";
@@ -356,4 +356,98 @@ export function TurnRail({ revision }: { revision: string }) {
       </li>)}
     </ol>
   </nav>;
+}
+
+interface ReadingPosition {
+  id: string;
+  offset: number;
+}
+
+// 本标签页内每个会话读到哪里；贴近底部时不记，回来照常贴底。
+const readingPositions = new Map<string, ReadingPosition>();
+
+// 阅读区顶缘下的第一条消息：用 elementFromPoint 取，不逐条扫描；落在消息间隙时往下多探两次。
+function readingPosition(scroller: HTMLElement): ReadingPosition | null {
+  const box = scroller.getBoundingClientRect();
+  const top = box.top + readingTopInset(scroller);
+  for (const dy of [2, 24, 48]) {
+    const hit = document.elementFromPoint(box.left + box.width / 2, top + dy)?.closest<HTMLElement>(".web-message-anchor[data-message-id]");
+    if (hit && scroller.contains(hit)) return { id: hit.dataset.messageId ?? "", offset: hit.getBoundingClientRect().top - box.top };
+  }
+  return null;
+}
+
+/** 切走再切回会话时回到上次读到的位置；那条消息不在已载入范围内时照常贴底。 */
+export function SessionReadingMemory({ sessionId, ready }: { sessionId: string; ready: string }) {
+  const { scrollRef, stopScroll } = useStickToBottomContext();
+  const restoringRef = useRef<ReadingPosition | null>(null);
+  // 切换期间旧消息被清空时会话 id 可能还没变；只在消息确实属于当前会话时记录，免得清空引起的滚动抹掉旧位置。
+  const readyRef = useRef(ready);
+  readyRef.current = ready;
+
+  // 必要 effect：切换会话时取出该会话的阅读位置，等消息就绪后再恢复；恢复前不记录
+  useLayoutEffect(() => {
+    restoringRef.current = sessionId ? readingPositions.get(sessionId) ?? null : null;
+  }, [sessionId]);
+
+  // 必要 effect：消息就绪后把记住的那条消息放回原偏移；虚拟占位会让首次定位漂移，逐帧校正到稳定
+  useLayoutEffect(() => {
+    const target = restoringRef.current;
+    if (!target || !ready) return;
+    restoringRef.current = null;
+    // 1. 切换会话时滚动区会重新挂载，子组件的 layout effect 早于新滚动区的 ref 绑定；每帧重新取滚动区与锚点。
+    const find = () => {
+      const scroller = scrollRef.current;
+      const anchor = scroller?.isConnected
+        ? scroller.querySelector<HTMLElement>(`.web-message-anchor[data-message-id="${CSS.escape(target.id)}"]`) : null;
+      return scroller && anchor ? { scroller, anchor } : null;
+    };
+    // 2. 同一次提交里贴底逻辑还拿着"正在贴底"的旧状态会再调一次 scrollToBottom；定位放到之后的帧里逐帧压回。
+    let frames = 0;
+    let touched = false;
+    let cancelled = false;
+    const onInput = () => { touched = true; };
+    const inputs = ["wheel", "touchmove", "keydown", "pointerdown"] as const;
+    inputs.forEach((type) => window.addEventListener(type, onInput, { passive: true, capture: true }));
+    const finish = () => inputs.forEach((type) => window.removeEventListener(type, onInput, { capture: true }));
+    const step = () => {
+      const found = cancelled || touched ? null : find();
+      if (!found) return finish();
+      // 3. 第一次找到锚点时离开贴底跟随，之后的内容增长不再把视图拉回底部。
+      if (frames === 0) stopScroll();
+      const delta = found.anchor.getBoundingClientRect().top - found.scroller.getBoundingClientRect().top - target.offset;
+      if (Math.abs(delta) > 1) found.scroller.scrollTop += delta;
+      frames += 1;
+      if (frames < 20) window.requestAnimationFrame(step);
+      else finish();
+    };
+    const first = window.requestAnimationFrame(step);
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(first);
+    };
+  }, [ready, scrollRef, stopScroll]);
+
+  // 必要 effect：随滚动记录阅读位置（合并到每帧一次）；恢复尚未完成时不覆盖
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller || !sessionId) return;
+    let frame = 0;
+    const record = () => {
+      frame = 0;
+      if (restoringRef.current || !readyRef.current) return;
+      const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+      const position = gap > 80 ? readingPosition(scroller) : null;
+      if (position?.id) readingPositions.set(sessionId, position);
+      else if (gap <= 80) readingPositions.delete(sessionId);
+    };
+    const onScroll = () => { if (!frame) frame = window.requestAnimationFrame(record); };
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      scroller.removeEventListener("scroll", onScroll);
+    };
+  }, [scrollRef, sessionId]);
+
+  return null;
 }
