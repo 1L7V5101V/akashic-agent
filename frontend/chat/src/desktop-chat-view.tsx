@@ -1,4 +1,4 @@
-import { type TimelineMessage, timelineReplyGroups, timelineText, timelineToolResults, timelineInputStarts, timelineSourceKey, timelineSourceRefreshTokens } from "./message-timeline";
+import { type TimelineMessage, type TimelineReply, timelineReplyGroups, timelineText, timelineToolResults, timelineInputStarts, timelineSourceKey, timelineSourceRefreshTokens } from "./message-timeline";
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useStickToBottomContext } from "use-stick-to-bottom";
 import { cycleTheme, useTheme } from "../../theme/src/theme-runtime";
@@ -64,6 +64,11 @@ export function DesktopChatView({ embeddedShell, controller }: DesktopChatViewPr
   } = controller;
   const inputResult = useMemo(() => lastInputResult(timelineMessages), [timelineMessages]);
   const inputId = messages.filter((message) => message.role === "user").at(-1)?.id ?? inputResult.id;
+  // 选了回复引用就是要开始写：焦点直接进输入框（触屏会弹出键盘），不必再点一次。
+  const replyTo = useCallback((reply: TimelineReply) => {
+    handleReplyMessage(reply);
+    composerApi.current?.focus();
+  }, [handleReplyMessage]);
   const sidebarProjects = useMemo(() => projectsInstalled ? {
     items: projects, pending: pendingProjects, pendingError: pendingProjectsError,
     activeProjectId: activeProject?.id ?? "", memoryInstalled,
@@ -134,7 +139,7 @@ export function DesktopChatView({ embeddedShell, controller }: DesktopChatViewPr
                 />
                 <DesktopTimelineMessages messages={timelineMessages} activities={replyActivities} refresh={controller.timelineRefresh} status={status}
                   messageElementsRef={messageElementsRef} copiedMessageId={copiedMessageId}
-                  onReply={handleReplyMessage} onEditInput={editInput} onCopied={handleCopiedMessage} onError={reportError} />
+                  onReply={replyTo} onEditInput={editInput} onCopied={handleCopiedMessage} onError={reportError} />
                 <DesktopConversationMessages
                   messages={messages} status={status}
                   carryDayKey={timelineMessages.length

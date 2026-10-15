@@ -22,6 +22,8 @@ export type ComposerFile = { filename?: string; mediaType?: string; url?: string
 export interface ComposerApi {
   /** append：接在已有草稿之后（空行分隔），否则替换。 */
   insertDraft: (text: string, options?: { append?: boolean }) => void;
+  /** 把焦点交给输入框并把光标放到末尾（如选择回复引用之后）。 */
+  focus: () => void;
 }
 
 /** Own transient editor state while the app controller owns transport and durable chat state. */
@@ -98,6 +100,12 @@ export const DesktopComposer = memo(function DesktopComposer({
     ));
   }, []);
   useImperativeHandle(ref, () => ({
+    focus: () => window.requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      textarea.focus({ preventScroll: true });
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    }),
     // 写入后把焦点与光标放到草稿末尾，用户接着补完即可。
     insertDraft: (text, options) => {
       const current = options?.append ? drafts.current.get(draftKey)?.trim() : "";

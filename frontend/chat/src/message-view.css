@@ -1507,10 +1507,17 @@ button.tool-step-summary:active {
   background: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent);
 }
 
-.shared-message-actions button:hover,
+/* 触屏的 :hover 会在点击后粘住，悬停底色只给真正能悬停的指针；按下反馈两者都有。 */
 .shared-message-actions button:active {
   color: var(--ak-ink-primary);
   background: color-mix(in oklch, var(--ak-ink-primary) 6%, transparent);
+}
+
+@media (hover: hover) {
+  .shared-message-actions button:hover {
+    color: var(--ak-ink-primary);
+    background: color-mix(in oklch, var(--ak-ink-primary) 6%, transparent);
+  }
 }
 
 .shared-message-meta {
