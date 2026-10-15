@@ -16,6 +16,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup,
   DropdownMenuRadioItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { MarqueeText } from "./marquee-text";
 import {
   PROJECT_MEMORY_CHOICES,
   projectMemoryLabel,
@@ -183,24 +184,27 @@ export function ProjectNavigationRow({
       { label: "新建对话", icon: <Plus size={18} aria-hidden="true" />, onSelect: onNewChat },
       ...(actions ?? []),
     ]}>
-      <button type="button" className="project-group__toggle"
+      {/* 与右侧项目名按钮做同一件事，键盘只停项目名一处。 */}
+      <button type="button" className="project-group__toggle" tabIndex={-1}
         aria-label={`${open ? "收起" : "展开"} ${project.name} 的对话`} aria-expanded={open}
         onClick={onToggle} disabled={searching}>
         <ChevronRight size={14} aria-hidden="true" className="project-group__chevron" />
       </button>
-      <button type="button" className="project-group__open" onClick={onToggle}
-        aria-expanded={open} disabled={searching}
+      {/* 搜索时只停用折叠，不禁用按钮：它是这一行唯一的键盘入口，行菜单（含"新建对话"）要靠它 Shift+F10 打开。 */}
+      <button type="button" className="project-group__open" data-row-primary="" onClick={searching ? undefined : onToggle}
+        aria-expanded={open} aria-disabled={searching || undefined}
         title={`${open ? "收起" : "展开"} ${project.name}${project.directory ? ` · ${project.directory}` : ""}`}>
         {collapsedStatus
           ? <span className="project-group__icon"><SessionStatusMark status={collapsedStatus} /></span>
           : <Folder size={18} strokeWidth={1.75} aria-hidden="true" />}
-        <span className="project-group__name">{project.name}</span>
+        <span className="project-group__name"><MarqueeText>{project.name}</MarqueeText></span>
         {project.memory && project.memory !== "global" ? (
           <small className="project-group__memory">{projectMemoryLabel(project.memory)}</small>
         ) : project.memoryUnreadable ? <small className="project-group__memory">当前策略未能读取</small> : null}
       </button>
+      {/* 行菜单里有同一个"新建对话"：键盘用 Shift+F10 打开，不再每个项目多占一个 Tab 停靠点。 */}
       <button type="button" className="project-navigation__icon project-group__new-chat" aria-label={`在 ${project.name} 中新建对话`}
-        title="新建对话" onClick={onNewChat}>
+        title="新建对话" tabIndex={-1} onClick={onNewChat}>
         <Plus size={14} aria-hidden="true" />
       </button>
     </NavigationRowMenu>
@@ -215,7 +219,7 @@ export function ProjectNavigationRow({
         onPointerEnter={() => onPrefetchSession?.(session.id)}
         onFocus={() => onPrefetchSession?.(session.id)}>
         <SessionStatusMark status={session.status} />
-        <span className="project-session__title">{session.title}</span>
+        <span className="project-session__title"><MarqueeText>{session.title}</MarqueeText></span>
       </button>)}
     </nav> : null}
   </div>;
