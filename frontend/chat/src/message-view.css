@@ -1185,6 +1185,15 @@ button.tool-step-summary:active {
 }
 
 /* 统一 diff：增删行用状态色的文字加极淡底色，整行铺满；路径头与 hunk 头退成次级。 */
+/* 每行一个网格项：列宽取最长一行与容器宽的较大者，增删底色整行铺到最右；内容整体横滚。 */
+.tool-result.is-diff {
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr);
+  overflow: auto hidden;
+  white-space: pre;
+  overscroll-behavior-x: contain;
+}
+.tool-result.is-diff .tool-diff-line { display: block; }
 .tool-diff-line { display: inline-block; min-inline-size: 100%; }
 .tool-diff-line.is-add {
   color: var(--ak-color-status-success);
