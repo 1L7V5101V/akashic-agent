@@ -301,11 +301,11 @@ export const DesktopSidebar = memo(function DesktopSidebar({
   const searchRef = useRef<HTMLInputElement>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // 面板没有固定触发按钮（输入框里按快捷键也能打开）：打开前记下焦点与光标，关闭后放回原处接着写。
-  const shortcutsReturn = useRef<{ element: HTMLElement; selection: [number, number] | null } | null>(null);
+  const shortcutsReturn = useRef<{ element: HTMLElement; selection: [number, number, "forward" | "backward" | "none"] | null } | null>(null);
   const openShortcuts = useCallback(() => {
     const element = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
     const field = element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement ? element : null;
-    shortcutsReturn.current = element ? { element, selection: field && field.selectionStart !== null && field.selectionEnd !== null ? [field.selectionStart, field.selectionEnd] : null } : null;
+    shortcutsReturn.current = element ? { element, selection: field && field.selectionStart !== null && field.selectionEnd !== null ? [field.selectionStart, field.selectionEnd, field.selectionDirection ?? "none"] : null } : null;
     setShortcutsOpen(true);
   }, []);
   const returnShortcutsFocus = useCallback(() => {
