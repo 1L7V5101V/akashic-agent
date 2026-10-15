@@ -64,6 +64,8 @@ export type PromptInputProps = Omit<
   "onSubmit" | "onError"
 > & {
   multiple?: boolean;
+  /** 附件归属（会话草稿键）；变化时当前附件存到旧键名下，换出新键的那一份。 */
+  attachmentKey?: string;
   onSubmit: (
     message: PromptInputMessage,
     event: FormEvent<HTMLFormElement>
@@ -74,6 +76,7 @@ export type PromptInputProps = Omit<
 export const PromptInput = ({
   className,
   multiple,
+  attachmentKey = "",
   onSubmit,
   children,
   ...props
@@ -85,12 +88,26 @@ export const PromptInput = ({
   const [submittedFileIds, setSubmittedFileIds] = useState<string[]>([]);
 
   const [files, setFiles] = useState<(FileUIPart & { id: string })[]>([]);
-  // 卸载时读取最新附件，避免闭包持有旧列表而漏掉 Blob URL。
+  // 附件与草稿一样按会话保留：切走时存到旧会话名下，切回时取出，不跟到别的会话里被发出去。
+  const [parked, setParked] = useState<{ key: string; others: ReadonlyMap<string, (FileUIPart & { id: string })[]> }>(
+    () => ({ key: attachmentKey, others: new Map() }));
+  if (parked.key !== attachmentKey) {
+    const others = new Map(parked.others);
+    if (files.length) others.set(parked.key, files);
+    else others.delete(parked.key);
+    const restored = others.get(attachmentKey) ?? [];
+    others.delete(attachmentKey);
+    setParked({ key: attachmentKey, others });
+    setFiles(restored);
+  }
+  // 卸载时读取最新附件（含存起来的），避免闭包持有旧列表而漏掉 Blob URL。
   const filesRef = useRef(files);
+  const parkedRef = useRef(parked.others);
 
   useEffect(() => {
     filesRef.current = files;
-  }, [files]);
+    parkedRef.current = parked.others;
+  }, [files, parked]);
 
   const openFileDialog = useCallback(() => {
     inputRef.current?.click();
@@ -117,15 +134,28 @@ export const PromptInput = ({
     []
   );
 
+  // 发送成功时本次附件可能已随切换会话存到别处，两边一起移除。
   const remove = useCallback(
-    (id: string) =>
+    (id: string) => {
       setFiles((prev) => {
         const found = prev.find((file) => file.id === id);
         if (found?.url) {
           URL.revokeObjectURL(found.url);
         }
         return prev.filter((file) => file.id !== id);
-      }),
+      });
+      setParked((prev) => {
+        if (![...prev.others.values()].some((list) => list.some((file) => file.id === id))) return prev;
+        const others = new Map<string, (FileUIPart & { id: string })[]>();
+        for (const [key, list] of prev.others) {
+          const found = list.find((file) => file.id === id);
+          if (found?.url) URL.revokeObjectURL(found.url);
+          const rest = list.filter((file) => file.id !== id);
+          if (rest.length) others.set(key, rest);
+        }
+        return { key: prev.key, others };
+      });
+    },
     []
   );
 
@@ -152,7 +182,7 @@ export const PromptInput = ({
 
   useEffect(
     () => () => {
-      for (const file of filesRef.current) {
+      for (const file of [...filesRef.current, ...[...parkedRef.current.values()].flat()]) {
         if (file.url) URL.revokeObjectURL(file.url);
       }
     },
