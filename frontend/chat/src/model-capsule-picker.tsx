@@ -310,7 +310,12 @@ export function ModelCapsulePicker({
   }
 
   const hasSelection = Boolean(selectedRuntimeId ? explicitModel : runtimes.find((runtime) => runtime.id === defaultRuntime));
-  const selectionLabel = hasSelection ? visibleModel.model : selectedRuntimeId || defaultRuntime ? "所选模型不可用" : "选择对话模型";
+  // 输入区触发钮只放模型名本身：OpenRouter 式 "deepseek/deepseek-v4-pro" 去掉厂商前缀，
+  // 截断时留下能区分型号的后半段；完整 ID 留在 title 与面板里。先取成字符串副本再切，
+  // 直接在 visibleModel.model 上调用会让 React Compiler 认为 explicitModel 可能被改而放弃 memo。
+  const fullModelName = `${visibleModel.model}`;
+  const selectionLabel = hasSelection ? fullModelName.slice(fullModelName.lastIndexOf("/") + 1) || fullModelName
+    : selectedRuntimeId || defaultRuntime ? "所选模型不可用" : "选择对话模型";
 
   return (
     <div ref={rootRef} className={`model-picker ${open ? "is-open" : ""} ${explicitModel ? "is-pinned" : ""}`}>
@@ -319,7 +324,8 @@ export function ModelCapsulePicker({
         type="button"
         className="model-picker__trigger"
         aria-expanded={open}
-        aria-label={hasSelection ? `选择模型，当前 ${visibleModel.model}` : selectionLabel}
+        title={hasSelection ? fullModelName : undefined}
+        aria-label={hasSelection ? `选择模型，当前 ${fullModelName}` : selectionLabel}
         disabled={disabled}
         onClick={() => {
           if (open) closePicker(false);

@@ -64,10 +64,18 @@ export function formatModelCallStats(stats: ModelCallStats, active: boolean): st
     && stats.duration_ms > stats.first_token_ms && usage?.coverage === "exact"
     && usage.output_tokens !== null && usage.request_count > 0 && usage.covered_request_count === usage.request_count) {
     parts.push(`${(usage.output_tokens * 1000 / (stats.duration_ms - stats.first_token_ms)).toFixed(1)} tok/s`);
-  } else if (stats.duration_ms !== null) parts.push(`耗时 ${(stats.duration_ms / 1000).toFixed(1)}s`);
-  if ((stats.state === "error" && usage === null) || (stats.state === "started" && !active)) parts.push("用量未结算");
+  } else if (stats.duration_ms !== null) parts.push(`耗时 ${formatCallDuration(stats.duration_ms)}`);
+  // 生成中用量本来就还没结算，不必再说一遍；只有结束后仍缺用量才值得提。
+  if (!active && (stats.state === "error" ? usage === null : stats.state === "started")) parts.push("用量未结算");
   if (!parts.length) return active ? "等待首 token…" : "暂无耗时数据";
   return parts.join(" · ");
+}
+
+// 一分钟内保留一位小数，超过一分钟改成"1m 52s"，与本轮摘要的时长写法一致。
+function formatCallDuration(durationMs: number): string {
+  if (durationMs < 60_000) return `${(durationMs / 1000).toFixed(1)}s`;
+  const seconds = Math.round(durationMs / 1000);
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 }
 
 export const loadWebModelCallStats: LoadModelCallStats = async (callId, signal) => {
