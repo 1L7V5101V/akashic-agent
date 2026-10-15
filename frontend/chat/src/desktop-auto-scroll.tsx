@@ -381,9 +381,6 @@ function readingPosition(scroller: HTMLElement): ReadingPosition | null {
 export function SessionReadingMemory({ sessionId, ready }: { sessionId: string; ready: string }) {
   const { scrollRef, stopScroll } = useStickToBottomContext();
   const restoringRef = useRef<ReadingPosition | null>(null);
-  // 切换期间旧消息被清空时会话 id 可能还没变；只在消息确实属于当前会话时记录，免得清空引起的滚动抹掉旧位置。
-  const readyRef = useRef(ready);
-  readyRef.current = ready;
 
   // 必要 effect：切换会话时取出该会话的阅读位置，等消息就绪后再恢复；恢复前不记录
   useLayoutEffect(() => {
@@ -428,14 +425,15 @@ export function SessionReadingMemory({ sessionId, ready }: { sessionId: string; 
     };
   }, [ready, scrollRef, stopScroll]);
 
-  // 必要 effect：随滚动记录阅读位置（合并到每帧一次）；恢复尚未完成时不覆盖
+  // 必要 effect：随滚动记录阅读位置（合并到每帧一次）；恢复尚未完成时不覆盖。
+  // 切换期间旧消息被清空时会话 id 可能还没变；只在消息确实属于当前会话（ready）时记录，免得清空引起的滚动抹掉旧位置。
   useEffect(() => {
     const scroller = scrollRef.current;
-    if (!scroller || !sessionId) return;
+    if (!scroller || !sessionId || !ready) return;
     let frame = 0;
     const record = () => {
       frame = 0;
-      if (restoringRef.current || !readyRef.current) return;
+      if (restoringRef.current) return;
       const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
       const position = gap > 80 ? readingPosition(scroller) : null;
       if (position?.id) readingPositions.set(sessionId, position);
@@ -447,7 +445,7 @@ export function SessionReadingMemory({ sessionId, ready }: { sessionId: string; 
       window.cancelAnimationFrame(frame);
       scroller.removeEventListener("scroll", onScroll);
     };
-  }, [scrollRef, sessionId]);
+  }, [ready, scrollRef, sessionId]);
 
   return null;
 }
