@@ -524,9 +524,22 @@
 }
 
 .reading-table {
+  --code-edge: 28px;
   max-width: 100%;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   margin-block: 1rem;
+}
+
+/* 与代码块同一套横滚提示：哪边还有列，哪边渐隐。 */
+.reading-table[data-overflow="end"] {
+  mask-image: linear-gradient(to right, #000 calc(100% - var(--code-edge)), transparent);
+}
+.reading-table[data-overflow="start"] {
+  mask-image: linear-gradient(to right, transparent, #000 var(--code-edge));
+}
+.reading-table[data-overflow="start end"] {
+  mask-image: linear-gradient(to right, transparent, #000 var(--code-edge), #000 calc(100% - var(--code-edge)), transparent);
 }
 
 :is(.agent-content, .process-markdown, .user-bubble) .markdown-reading table {
@@ -538,6 +551,11 @@
   padding: 0.55rem 0.6rem;
   max-width: 20rem;
   border-block-end: 1px solid var(--ak-rule-subtle);
+}
+
+/* 紧凑外壳（触屏为主）列多时宁可横滚，也不把每列挤成三四个字一行；宽屏鼠标横滚别扭，仍以折行为主。 */
+@media (max-width: 820px) {
+  :is(.agent-content, .process-markdown, .user-bubble) .markdown-reading :where(th, td) { min-width: 8.5em; }
 }
 
 :is(.agent-content, .process-markdown, .user-bubble) .markdown-reading th {
