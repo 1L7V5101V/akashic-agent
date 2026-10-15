@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 
 /** 只显示宿主执行连接状态；恢复连接不会恢复已经失效的命令句柄。 */
-export function HostBridgeNotice() {
+/** paused：聊天连接本身断开时宿主状态无从确认，同源提示交给连接状态行，这里不再重复。 */
+export function HostBridgeNotice({ paused = false }: { paused?: boolean }) {
   const [notice, setNotice] = useState("");
   useEffect(() => {
     const abort = new AbortController();
@@ -29,5 +30,5 @@ export function HostBridgeNotice() {
     void refresh();
     return () => { abort.abort(); clearTimeout(timer); };
   }, []);
-  return notice ? <p role="status" className="reply-unavailable">{notice}</p> : null;
+  return notice && !paused ? <p role="status" className="reply-unavailable">{notice}</p> : null;
 }

@@ -92,6 +92,8 @@ function clearChatRoute() {
   window.history.replaceState(null, "", url);
 }
 
+const RECONNECTING_NOTICE = "连接已断开，正在重新连接…";
+
 export function useDesktopChatController() {
   const [surface, setSurface] = useState<"chat" | "runtime">(
     () => new URLSearchParams(window.location.search).get("surface") === "runtime" ? "runtime" : "chat",
@@ -624,7 +626,7 @@ export function useDesktopChatController() {
         setSessionJobs(null);
         for (const settle of jobStopsRef.current.values()) settle(false);
         setStatusLive(replyChatStatus([], messagesRef.current.length, [], false));
-        if (event.code !== 1000 && event.code !== 1013) setConnectionError("连接已断开，正在重新连接…");
+        if (event.code !== 1000 && event.code !== 1013) setConnectionError(RECONNECTING_NOTICE);
         yield* reconnect.next(undefined);
         socket = yield* Effect.sync(() => new WebSocket(url));
         socketRef.current = socket;
@@ -1185,7 +1187,9 @@ export function useDesktopChatController() {
     canSend, modelProblem, modelsPhase, modelsError, retryModels, draftKey: activeSessionId || `new:${newChatProjectId}`,
     historyHasMore, historyLoading, historyLoadingOlder, loadOlderMessages, sessionRequested: requestedSessionId !== "",
     activeSessionDeleted, deletedNotice, deleteSession, restoreSession, dismissDeletedNotice, renameSession,
-    selectedRuntimeId, selectedReasoningEffort, replyTarget, error: error || connectionError,
+    // 自动重连是会自己恢复的临时状态，单独给视图一个安静的状态行；重连失败等才走错误行。
+    reconnecting: !error && connectionError === RECONNECTING_NOTICE,
+    selectedRuntimeId, selectedReasoningEffort, replyTarget, error: error || (connectionError === RECONNECTING_NOTICE ? "" : connectionError),
     activateSession, prefetchSessionTail, startNewChat, handleReplyMessage, handleCopiedMessage,
     reportError, handleModelChange, cancelReply, sendMessage, stopTurn, retry,
     projects, pendingProjects, pendingProjectsError, projectsInstalled, memoryInstalled, activeProject, navigationPins, bindDirectory,

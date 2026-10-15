@@ -1675,6 +1675,19 @@ button.tool-step-summary:active {
 }
 .reply-activity-label { display: flex; gap: 0.75rem; color: var(--ak-color-text-secondary); font-size: 0.8125rem; }
 .reply-unavailable { color: var(--ak-color-text-secondary); font-size: 0.8125rem; text-align: center; }
+/* 自动重连：安静的状态行，不用错误色，不给危险按钮；呼吸点表示仍在尝试。 */
+.connection-status { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.connection-status > i {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--ak-color-status-warning);
+  animation: connection-breathe 1.6s var(--ak-sys-motion-standard) infinite;
+}
+.connection-status button {
+  border: 0; padding: 4px 2px; color: var(--ak-ink-primary); background: none; font: inherit;
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
+@keyframes connection-breathe { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .connection-status > i { animation: none; } }
 .timeline-control-summary strong, .timeline-result-heading strong { font-size: 0.875rem; }
 .timeline-result-heading button { display: block; min-height: 2.75rem; color: var(--ak-ink-secondary); font-size: 0.8125rem; }
 .timeline-result-heading button:hover { color: var(--ak-ink-primary); }

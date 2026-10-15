@@ -181,7 +181,11 @@ export function DesktopChatView({ embeddedShell, controller }: DesktopChatViewPr
           />
           <ComposerStatsLine messages={timelineMessages} activities={replyActivities} connected={replyAvailable !== null} />
           {replyAvailable === false ? <p className="reply-unavailable" role="status">当前未加载回复插件</p> : null}
-          <HostBridgeNotice />
+          {controller.reconnecting ? <p className="reply-unavailable connection-status" role="status">
+            <i aria-hidden="true" />连接已断开，正在重新连接…
+            <button type="button" onClick={retry}>立即重试</button>
+          </p> : null}
+          <HostBridgeNotice paused={controller.reconnecting} />
           {error ? <div className="error-line" role="alert"><span>{error}</span>
             <MaterialButton variant="danger" onClick={retry}>重试</MaterialButton>
           </div> : null}
