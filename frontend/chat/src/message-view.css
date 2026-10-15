@@ -1045,6 +1045,12 @@ button.tool-step-summary:active {
   grid-template-rows: 1fr;
 }
 
+/* grid 子项默认 min-width:auto 会被不折行的 diff 撑开（实测一行 1500 字撑到 1 万多像素）；归零后横滚留在结果区内。 */
+.tool-step-disclosure-inner,
+.tool-detail-section {
+  min-width: 0;
+}
+
 .tool-step-disclosure-inner {
   min-height: 0;
   overflow: clip;
