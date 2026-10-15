@@ -2821,6 +2821,13 @@ form.composer:focus-within [data-slot="input-group"] {
     min-width: 0;
   }
 
+  /* 窄屏输入卡没有横向内边距，宽屏那套 -10px 外扩会让引用条左贴边框、右侧留缝；改为四周等距内嵌，圆角跟卡片同心，抵掉一半纵向 gap。 */
+  .chat-main .composer:is(.is-compact, .is-expanded) [data-slot="input-group"] > .composer-reply {
+    width: auto;
+    margin: -6px 4px -4px;
+    border-radius: 18px 18px var(--md-sys-shape-corner-medium) var(--md-sys-shape-corner-medium);
+  }
+
   .chat-main .composer.is-compact textarea,
   .chat-main .composer.is-compact .composer__textarea,
   .chat-main .composer.is-expanded textarea,
