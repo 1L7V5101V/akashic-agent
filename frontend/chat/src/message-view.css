@@ -1930,7 +1930,12 @@ button.tool-step-summary:active {
 }
 .tool-result-fields dd { margin: 0.25rem 0 0; min-width: 0; }
 .tool-result-fields details { padding-inline-start: 0.75rem; border-inline-start: 1px solid var(--ak-rule-subtle); }
-.tool-result-data.error .tool-result { color: var(--ak-color-status-error); }
+/* 失败输出照常用正文墨色（整段日志染红只会喧嚣、难读）；错误语义由标题色与左侧 2px 细线承担。 */
+.tool-detail-section.is-error .tool-detail-heading h4 { color: var(--ak-color-status-error); }
+.tool-result-data.error .tool-result {
+  padding-inline-start: 0.75rem;
+  border-inline-start: 2px solid color-mix(in oklch, var(--ak-color-status-error) 60%, transparent);
+}
 
 /* 上下文提示：沿用思考行的触发行；原生 details 的三角标记换成右侧 chevron。 */
 .context-notice > summary {

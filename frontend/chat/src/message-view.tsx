@@ -1080,7 +1080,7 @@ const ToolStep = memo(function ToolStep({
                   </section>
                 ) : null}
                 {open && toolHasValue(resultValue) ? (
-                  <section className="tool-detail-section" aria-label={block.status === "output-error" ? "工具错误" : "工具结果"}>
+                  <section className={`tool-detail-section${block.status === "output-error" ? " is-error" : ""}`} aria-label={block.status === "output-error" ? "工具错误" : "工具结果"}>
                     <ToolDetailHeading
                       label={block.status === "output-error" ? "错误" : "结果"}
                       copied={copiedDetail?.section === "result" && copiedDetail.text === result}
