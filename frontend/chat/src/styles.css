@@ -1179,7 +1179,8 @@ input {
   background: transparent;
   /* 阅读列与输入卡的共同几何，唯一 owner 在这里；frontend/design.md §布局与对齐。 */
   --chat-column: 52rem;
-  --chat-dock-inset: 0.75rem;
+  /* 宽屏 2rem：侧栏展开后 820–1180px 这一段阅读列贴满主区，12px 时正文和输入卡几乎顶到边。 */
+  --chat-dock-inset: 2rem;
   --chat-bubble-max: 34rem;
   /* 输入卡边框外缘到输入文字的距离：1px 边框 + 15px padding。 */
   --composer-text-inset: 16px;
@@ -1617,7 +1618,7 @@ input {
   inset: auto;
   flex: none;
   inline-size: min(
-    calc(100% - 12px),
+    calc(100% - 2 * max(6px, var(--chat-dock-inset) - var(--composer-text-inset))),
     calc(var(--chat-column) - 2 * var(--chat-dock-inset) + 2 * var(--composer-text-inset))
   );
   margin-block: 0 auto;
@@ -2647,7 +2648,7 @@ form.composer:focus-within [data-slot="input-group"] {
   );
   inset-inline-end: auto;
   inline-size: min(
-    calc(100% - 12px),
+    calc(100% - 2 * max(6px, var(--chat-dock-inset) - var(--composer-text-inset))),
     calc(var(--chat-column) - 2 * var(--chat-dock-inset) + 2 * var(--composer-text-inset))
   );
 }
