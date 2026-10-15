@@ -1933,6 +1933,8 @@ button.tool-step-summary:active {
 /* 失败输出照常用正文墨色（整段日志染红只会喧嚣、难读）；错误语义由标题色与左侧 2px 细线承担。 */
 .tool-detail-section.is-error .tool-detail-heading h4 { color: var(--ak-color-status-error); }
 .tool-result-data.error .tool-result {
+  /* 普通结果是 52% 透明墨色；失败原因需要读，提到次级墨色（浅色对比度 ≥4.5:1）。 */
+  color: var(--ak-ink-secondary);
   padding-inline-start: 0.75rem;
   border-inline-start: 2px solid color-mix(in oklch, var(--ak-color-status-error) 60%, transparent);
 }
