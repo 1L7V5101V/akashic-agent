@@ -50,7 +50,6 @@ from plugins.models.contract import (
 )
 from plugins.models.contract import ModelDriverDefinition
 
-
 _DRIVER_ID = "opencode-go"
 _CONTRACT_VERSION = "1"
 _DEFAULT_ENDPOINT = "https://opencode.ai/zen/go/v1"
@@ -72,6 +71,8 @@ _CONTEXT_CODES = (
     "string too long",
     "too many tokens",
 )
+
+
 @dataclass(frozen=True, slots=True)
 class _ConnectionConfig:
     base_url: str
@@ -103,9 +104,11 @@ class _BoundChat:
 
         if request.continuation is not None:
             # 发送前本地校验失败：可证明请求未发出。
-            raise _unsent(InvalidRequestError(
-                "OpenCode Go Chat Completions does not support continuation state"
-            ).exception())
+            raise _unsent(
+                InvalidRequestError(
+                    "OpenCode Go Chat Completions does not support continuation state"
+                ).exception()
+            )
         body = _chat_body(self._descriptor, request)
         # 生成调用恒为一次物理 attempt：重试预算唯一 owner 是 Models；
         # 未带 request_key 的直调同样不得隐式重发（§6.3）。max_retries
@@ -165,7 +168,9 @@ async def _open(
 ) -> DriverConnection:
     connection = _connection_config(descriptor)
     if credential.connection_id != descriptor.connection_id:
-        raise AuthenticationError("credential connection scope does not match").exception()
+        raise AuthenticationError(
+            "credential connection scope does not match"
+        ).exception()
     if credential.auth_identity != descriptor.auth_identity:
         raise AuthenticationError("credential auth identity does not match").exception()
 
@@ -188,9 +193,13 @@ async def _open(
         raw_config: Mapping[str, Any],
     ) -> Any:
         _ = model, raw_config
-        raise ModelUnavailableError("OpenCode Go is a chat-only model driver").exception()
+        raise ModelUnavailableError(
+            "OpenCode Go is a chat-only model driver"
+        ).exception()
 
-    return DriverConnection(bind_chat=bind_chat, bind_embedding=bind_embedding, close=http.aclose)
+    return DriverConnection(
+        bind_chat=bind_chat, bind_embedding=bind_embedding, close=http.aclose
+    )
 
 
 async def _start_auth(input: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -261,26 +270,42 @@ def _read_local_key(database: Path, legacy: Path) -> str:
             finally:
                 connection.close()
         except sqlite3.Error as error:
-            raise AuthenticationError("local OpenCode credential database cannot be read").exception() from error
+            raise AuthenticationError(
+                "local OpenCode credential database cannot be read"
+            ).exception() from error
         if row is not None:
             try:
                 value = json.loads(row[0]) if isinstance(row[0], str) else None
             except json.JSONDecodeError as error:
-                raise AuthenticationError("local OpenCode Go database credential is invalid").exception() from error
-            key = value.get("key") if isinstance(value, dict) and value.get("type") == "key" else None
+                raise AuthenticationError(
+                    "local OpenCode Go database credential is invalid"
+                ).exception() from error
+            key = (
+                value.get("key")
+                if isinstance(value, dict) and value.get("type") == "key"
+                else None
+            )
             if not isinstance(key, str) or not key.strip():
-                raise AuthenticationError("local OpenCode Go database credential is invalid").exception()
+                raise AuthenticationError(
+                    "local OpenCode Go database credential is invalid"
+                ).exception()
             return key.strip()
     try:
         document = json.loads(legacy.read_text(encoding="utf-8"))
     except FileNotFoundError as error:
-        raise AuthenticationError("local OpenCode login was not found").exception() from error
+        raise AuthenticationError(
+            "local OpenCode login was not found"
+        ).exception() from error
     except (OSError, json.JSONDecodeError) as error:
-        raise AuthenticationError("local OpenCode auth.json cannot be read").exception() from error
+        raise AuthenticationError(
+            "local OpenCode auth.json cannot be read"
+        ).exception() from error
     entry = document.get("opencode-go") if isinstance(document, dict) else None
     key = entry.get("key") if isinstance(entry, dict) else None
     if not isinstance(key, str) or not key.strip():
-        raise AuthenticationError("local OpenCode Go login does not contain an API key").exception()
+        raise AuthenticationError(
+            "local OpenCode Go login does not contain an API key"
+        ).exception()
     return key.strip()
 
 
@@ -320,7 +345,9 @@ async def _discover(
     _check_credential_scope(descriptor, credential)
     http = HttpClient(lambda: _client(connection))
     try:
-        payload = await _request_json(connection, credential, "GET", "/models", http=http)
+        payload = await _request_json(
+            connection, credential, "GET", "/models", http=http
+        )
     finally:
         await http.aclose()
     cli_catalog = await _load_cli_catalog()
@@ -330,7 +357,9 @@ async def _discover(
     result: list[DiscoveredModel] = []
     for raw in raw_models:
         if not isinstance(raw, Mapping):
-            raise TransportError("models response contains a non-object item").exception()
+            raise TransportError(
+                "models response contains a non-object item"
+            ).exception()
         model = raw.get("id")
         if not isinstance(model, str) or not model.strip():
             raise TransportError("models response contains an invalid id").exception()
@@ -340,10 +369,12 @@ async def _discover(
         cli_owned = normalized in cli_catalog
         metadata = cli_catalog.get(normalized, raw)
         efforts = _reasoning_efforts(cli_catalog[normalized]) if cli_owned else ()
-        context_window, max_output_tokens, supports_tools = _catalog_capabilities(metadata)
+        context_window, max_output_tokens, supports_tools = _catalog_capabilities(
+            metadata
+        )
         result.append(
             DiscoveredModel(
-                kind='chat',
+                kind="chat",
                 model=normalized,
                 default_reasoning_effort=("high" if "high" in efforts else None),
                 capabilities=ModelCapabilities(
@@ -398,7 +429,10 @@ async def _load_cli_catalog() -> dict[str, Mapping[str, Any]]:
     except asyncio.CancelledError:
         raise
     except (RuntimeError, TimeoutError, OSError) as _model_error:
-        if not (ModelError.matches(_model_error, TransportError) or isinstance(_model_error, OSError)):
+        if not (
+            ModelError.matches(_model_error, TransportError)
+            or isinstance(_model_error, OSError)
+        ):
             raise
         return {}
 
@@ -423,14 +457,20 @@ async def _run_cli_catalog() -> dict[str, Mapping[str, Any]]:
     except TimeoutError as error:
         process.kill()
         _ = await process.wait()
-        raise TransportError("OpenCode model catalog command timed out").exception() from error
+        raise TransportError(
+            "OpenCode model catalog command timed out"
+        ).exception() from error
     if process.returncode != 0:
         detail = stderr.decode("utf-8", errors="replace").strip()[:500]
-        raise TransportError(f"OpenCode model catalog command failed: {detail}").exception()
+        raise TransportError(
+            f"OpenCode model catalog command failed: {detail}"
+        ).exception()
     try:
         output = stdout.decode("utf-8", errors="strict")
     except UnicodeDecodeError as error:
-        raise TransportError("OpenCode model catalog is not valid UTF-8").exception() from error
+        raise TransportError(
+            "OpenCode model catalog is not valid UTF-8"
+        ).exception() from error
     return _parse_cli_catalog(output)
 
 
@@ -446,10 +486,14 @@ def _parse_cli_catalog(output: str) -> dict[str, Mapping[str, Any]]:
             break
         line_end = output.find("\n", cursor)
         if line_end < 0:
-            raise TransportError("OpenCode model catalog has an incomplete header").exception()
+            raise TransportError(
+                "OpenCode model catalog has an incomplete header"
+            ).exception()
         header = output[cursor:line_end].strip()
         if not header.startswith(prefix) or not header.removeprefix(prefix).strip():
-            raise TransportError("OpenCode model catalog contains an unknown record").exception()
+            raise TransportError(
+                "OpenCode model catalog contains an unknown record"
+            ).exception()
         model = header.removeprefix(prefix).strip()
         json_start = line_end + 1
         while json_start < len(output) and output[json_start].isspace():
@@ -457,9 +501,13 @@ def _parse_cli_catalog(output: str) -> dict[str, Mapping[str, Any]]:
         try:
             value, cursor = decoder.raw_decode(output, json_start)
         except json.JSONDecodeError as error:
-            raise TransportError("OpenCode model catalog contains invalid JSON").exception() from error
+            raise TransportError(
+                "OpenCode model catalog contains invalid JSON"
+            ).exception() from error
         if not isinstance(value, dict):
-            raise TransportError(f"OpenCode model {model} metadata is not an object").exception()
+            raise TransportError(
+                f"OpenCode model {model} metadata is not an object"
+            ).exception()
         result[model] = value
     return result
 
@@ -471,7 +519,9 @@ def _catalog_capabilities(
     context = limit.get("context") if isinstance(limit, Mapping) else None
     output = limit.get("output") if isinstance(limit, Mapping) else None
     capabilities = model.get("capabilities")
-    toolcall = capabilities.get("toolcall") if isinstance(capabilities, Mapping) else None
+    toolcall = (
+        capabilities.get("toolcall") if isinstance(capabilities, Mapping) else None
+    )
     return (
         context if isinstance(context, int) and context > 0 else None,
         output if isinstance(output, int) and output > 0 else None,
@@ -501,23 +551,33 @@ def _connection_config(descriptor: DriverConnectionDescriptor) -> _ConnectionCon
     legacy_provider = config.get("catalog_provider_id", "opencode-go")
     if legacy_provider not in {"", "opencode-go"}:
         raise ValueError("OpenCode Go catalog_provider_id must be opencode-go or empty")
-    connect_timeout = _positive_float(config.get("connect_timeout", 30.0), "connect_timeout")
+    connect_timeout = _positive_float(
+        config.get("connect_timeout", 30.0), "connect_timeout"
+    )
     read_timeout = _positive_float(config.get("read_timeout", 90.0), "read_timeout")
     max_retries = config.get("max_retries", 3)
-    if not isinstance(max_retries, int) or isinstance(max_retries, bool) or max_retries < 0:
+    if (
+        not isinstance(max_retries, int)
+        or isinstance(max_retries, bool)
+        or max_retries < 0
+    ):
         raise ValueError("max_retries must be a non-negative integer")
     # max_attempts 是 Models 独占的重试预算字段，driver 只校验不消费；
     # accounted 调用的 driver 重试恒为 0。
     max_attempts = config.get("max_attempts")
     if max_attempts is not None and (
-        not isinstance(max_attempts, int) or isinstance(max_attempts, bool) or max_attempts < 1
+        not isinstance(max_attempts, int)
+        or isinstance(max_attempts, bool)
+        or max_attempts < 1
     ):
         raise ValueError("max_attempts must be a positive integer")
     return _ConnectionConfig(
         base_url=_normalize_base_url(descriptor.endpoint),
         connect_timeout=connect_timeout,
         read_timeout=read_timeout,
-        progress_timeout=_positive_float(config.get("progress_timeout", 300.0), "progress_timeout"),
+        progress_timeout=_positive_float(
+            config.get("progress_timeout", 300.0), "progress_timeout"
+        ),
         max_retries=max_retries,
     )
 
@@ -553,9 +613,7 @@ def _chat_body(
     request: ModelRequest,
 ) -> dict[str, Any]:
     messages = _normalize_messages(request.messages)
-    if request.system_prompt and not (
-        messages and messages[0].get("role") == "system"
-    ):
+    if request.system_prompt and not (messages and messages[0].get("role") == "system"):
         messages.insert(0, {"role": "system", "content": request.system_prompt})
     messages = _merge_leading_system_messages(messages)
     body: dict[str, Any] = {
@@ -585,7 +643,9 @@ def _apply_reasoning_profile(
     model = descriptor.model.lower()
     effort = descriptor.reasoning_effort
     named_tool = isinstance(request.tool_choice, Mapping)
-    disabled = request.disable_reasoning or (model.startswith("deepseek-") and named_tool)
+    disabled = request.disable_reasoning or (
+        model.startswith("deepseek-") and named_tool
+    )
     if model.startswith("deepseek-"):
         if disabled:
             body["thinking"] = {"type": "disabled"}
@@ -593,7 +653,10 @@ def _apply_reasoning_profile(
         body["thinking"] = {"type": "enabled"}
         body["reasoning_effort"] = _cap_effort(effort, maximum="max") or "high"
         for message in body["messages"]:
-            if message.get("role") == "assistant" and "reasoning_content" not in message:
+            if (
+                message.get("role") == "assistant"
+                and "reasoning_content" not in message
+            ):
                 message["reasoning_content"] = ""
         return
     if model.startswith("glm-"):
@@ -660,9 +723,13 @@ def _normalize_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
             }
         elif key == "items" and isinstance(value, Mapping):
             projected[key] = _normalize_schema(value)
-        elif key == "enum" and isinstance(value, Sequence) and not isinstance(value, str):
+        elif (
+            key == "enum" and isinstance(value, Sequence) and not isinstance(value, str)
+        ):
             projected[key] = [item for item in value if item is not None]
-        elif key == "type" and isinstance(value, Sequence) and not isinstance(value, str):
+        elif (
+            key == "type" and isinstance(value, Sequence) and not isinstance(value, str)
+        ):
             non_null = [item for item in value if item != "null"]
             if non_null:
                 projected[key] = non_null[0]
@@ -733,13 +800,17 @@ async def _stream_chat(
             # 只复用传输连接，不继承旧凭据请求产生的 Cookie。
             client.cookies.clear()
             async with client.stream(
-                "POST", "/chat/completions", json=body,
+                "POST",
+                "/chat/completions",
+                json=body,
                 headers={"Authorization": f"Bearer {token}"},
             ) as response:
                 if response.status_code >= 400:
                     _ = await response.aread()
                 _raise_status(response, secret=token)
-                return await _consume_stream(response, on_delta, progress_timeout=connection.progress_timeout)
+                return await _consume_stream(
+                    response, on_delta, progress_timeout=connection.progress_timeout
+                )
         except asyncio.CancelledError:
             raise
         except _CallbackError as error:
@@ -748,9 +819,20 @@ async def _stream_chat(
             mapped = _map_error(error)
             if mapped is error and not ModelError.matches(error):
                 raise
-            response_delta_seen = (error.response_delta_seen if isinstance(error, _StreamReadError)
-                                   else (value.response_delta_seen if (value := ModelError.read(error)) is not None else False))
-            if response_delta_seen or not _retryable(mapped) or attempt >= connection.max_retries:
+            response_delta_seen = (
+                error.response_delta_seen
+                if isinstance(error, _StreamReadError)
+                else (
+                    value.response_delta_seen
+                    if (value := ModelError.read(error)) is not None
+                    else False
+                )
+            )
+            if (
+                response_delta_seen
+                or not _retryable(mapped)
+                or attempt >= connection.max_retries
+            ):
                 raise mapped from error
             last_error = mapped
             await asyncio.sleep(min(8.0, float(2**attempt)))
@@ -800,7 +882,9 @@ async def _consume_stream(
             try:
                 chunk = json.loads(data)
             except json.JSONDecodeError as error:
-                raise TransportError("stream contains invalid JSON").exception() from error
+                raise TransportError(
+                    "stream contains invalid JSON"
+                ).exception() from error
             if not isinstance(chunk, dict):
                 raise TransportError("stream chunk must be an object").exception()
             raw_usage = chunk.get("usage")
@@ -847,10 +931,16 @@ async def _consume_stream(
     except _CallbackError:
         raise
     except TimeoutError as error:
-        failure = ModelTimeoutError(f"模型流超过 {progress_timeout:g} 秒没有有效进展").exception()
-        raise _StreamReadError(failure, response_delta_seen=response_delta_seen) from error
+        failure = ModelTimeoutError(
+            f"模型流超过 {progress_timeout:g} 秒没有有效进展"
+        ).exception()
+        raise _StreamReadError(
+            failure, response_delta_seen=response_delta_seen
+        ) from error
     except Exception as error:
-        raise _StreamReadError(error, response_delta_seen=response_delta_seen) from error
+        raise _StreamReadError(
+            error, response_delta_seen=response_delta_seen
+        ) from error
     if not completed:
         error = TransportError("stream ended before its terminal marker").exception()
         raise _StreamReadError(error, response_delta_seen=response_delta_seen)
@@ -863,7 +953,9 @@ async def _consume_stream(
             usage=usage,
         )
     except Exception as error:
-        raise _StreamReadError(error, response_delta_seen=response_delta_seen) from error
+        raise _StreamReadError(
+            error, response_delta_seen=response_delta_seen
+        ) from error
 
 
 async def _emit_delta(
@@ -878,7 +970,9 @@ async def _emit_delta(
         raise _CallbackError(error) from error
 
 
-def _client(connection: _ConnectionConfig, token: str | None = None) -> httpx.AsyncClient:
+def _client(
+    connection: _ConnectionConfig, token: str | None = None
+) -> httpx.AsyncClient:
     headers = {} if token is None else {"Authorization": f"Bearer {token}"}
     timeout = httpx.Timeout(
         connect=connection.connect_timeout,
@@ -896,7 +990,11 @@ def _client(connection: _ConnectionConfig, token: str | None = None) -> httpx.As
 
 def _parse_chat_response(payload: Mapping[str, Any]) -> LLMResponse:
     choices = payload.get("choices")
-    if not isinstance(choices, list) or not choices or not isinstance(choices[0], Mapping):
+    if (
+        not isinstance(choices, list)
+        or not choices
+        or not isinstance(choices[0], Mapping)
+    ):
         raise TransportError("chat response is missing first choice").exception()
     choice = cast(Mapping[str, Any], choices[0])
     message = choice.get("message")
@@ -909,7 +1007,9 @@ def _parse_chat_response(payload: Mapping[str, Any]) -> LLMResponse:
     if thinking is None:
         thinking = message.get("reasoning")
     if thinking is not None and not isinstance(thinking, str):
-        raise TransportError("chat reasoning content must be string or null").exception()
+        raise TransportError(
+            "chat reasoning content must be string or null"
+        ).exception()
     raw_calls = message.get("tool_calls", [])
     calls: list[ToolCall] = []
     if not isinstance(raw_calls, list):
@@ -939,10 +1039,7 @@ def _parse_chat_response(payload: Mapping[str, Any]) -> LLMResponse:
     )
 
 
-
-def _merge_tool_deltas(
-    calls: dict[int, dict[str, str]], raw_calls: list[Any]
-) -> bool:
+def _merge_tool_deltas(calls: dict[int, dict[str, str]], raw_calls: list[Any]) -> bool:
     """合并合法工具片段，并报告是否增加了调用内容。"""
     advanced = False
     for raw in raw_calls:
@@ -950,7 +1047,9 @@ def _merge_tool_deltas(
             raise TransportError("stream tool call delta must be an object").exception()
         index = raw.get("index")
         if not isinstance(index, int) or isinstance(index, bool) or index < 0:
-            raise TransportError("stream tool call index must be non-negative").exception()
+            raise TransportError(
+                "stream tool call index must be non-negative"
+            ).exception()
         slot = calls.setdefault(index, {"id": "", "name": "", "arguments": ""})
         raw_id = raw.get("id")
         if isinstance(raw_id, str):
@@ -990,7 +1089,9 @@ def _tool_arguments(value: object) -> Mapping[str, Any]:
     try:
         parsed = json.loads(value)
     except json.JSONDecodeError as error:
-        raise TransportError("tool call arguments are invalid JSON").exception() from error
+        raise TransportError(
+            "tool call arguments are invalid JSON"
+        ).exception() from error
     if not isinstance(parsed, dict):
         raise TransportError("tool call arguments must decode to an object").exception()
     return cast(dict[str, Any], parsed)
@@ -1028,12 +1129,12 @@ def _usage(raw: Mapping[str, Any]) -> ModelUsage:
     )
     covered = int(input_tokens is not None and output_tokens is not None)
     coverage = (
-        'exact'
+        "exact"
         if covered
         else (
-            'partial'
+            "partial"
             if input_tokens is not None or output_tokens is not None
-            else 'unavailable'
+            else "unavailable"
         )
     )
     return ModelUsage(
@@ -1070,30 +1171,46 @@ def _status_error(response: httpx.Response, *, secret: str) -> Exception | None:
     message = _response_error_message(response, secret=secret)
     lowered = message.lower()
     if response.status_code in {401, 403}:
-        return AuthenticationError(f"模型授权失败（HTTP {response.status_code}），请检查凭据和权限。服务返回：{message}").exception()
+        return AuthenticationError(
+            f"模型授权失败（HTTP {response.status_code}），请检查凭据和权限。服务返回：{message}"
+        ).exception()
     if response.status_code >= 500:
         # status-first：5xx 只说明服务端/网关未给出结论，正文诊断文案
         # （context_length 等）不得把错误提升为可证明的容量拒绝。
-        return TransportError(f"模型服务暂不可用（HTTP {response.status_code}）。服务返回：{message}").exception()
+        return TransportError(
+            f"模型服务暂不可用（HTTP {response.status_code}）。服务返回：{message}"
+        ).exception()
     if any(code in lowered for code in _CONTEXT_CODES):
-        return ContextLengthError(f"模型上下文超过限制（HTTP {response.status_code}）。服务返回：{message}").exception()
+        return ContextLengthError(
+            f"模型上下文超过限制（HTTP {response.status_code}）。服务返回：{message}"
+        ).exception()
     if any(code in lowered for code in _SAFETY_CODES):
-        return ContentSafetyError(f"模型安全策略拒绝请求（HTTP {response.status_code}）。服务返回：{message}").exception()
+        return ContentSafetyError(
+            f"模型安全策略拒绝请求（HTTP {response.status_code}）。服务返回：{message}"
+        ).exception()
     if response.status_code == 402 or (
         response.status_code == 429
         and any(value in lowered for value in ("quota", "usage limit", "credit"))
     ):
-        return QuotaError(f"模型账号额度不足（HTTP {response.status_code}）。服务返回：{message}").exception()
+        return QuotaError(
+            f"模型账号额度不足（HTTP {response.status_code}）。服务返回：{message}"
+        ).exception()
     if response.status_code == 429:
-        error = RateLimitError(f"模型服务限流（HTTP 429）。服务返回：{message}").exception()
+        error = RateLimitError(
+            f"模型服务限流（HTTP 429）。服务返回：{message}"
+        ).exception()
         # Retry-After 必须随错误传给 Models，由独占重试预算决定何时再付。
-        error = ModelError.change(error, retry_at=retry_after_time(response.headers.get("retry-after")))
+        error = ModelError.change(
+            error, retry_at=retry_after_time(response.headers.get("retry-after"))
+        )
         return error
     if 400 <= response.status_code < 500:
         return InvalidRequestError(
             f"模型服务拒绝请求（HTTP {response.status_code}）。服务返回：{message}"
         ).exception()
-    error = TransportError(f"provider returned HTTP {response.status_code}: {message}").exception()
+    error = TransportError(
+        f"provider returned HTTP {response.status_code}: {message}"
+    ).exception()
     return error
 
 
@@ -1101,12 +1218,17 @@ def _response_error_message(response: httpx.Response, *, secret: str = "") -> st
     try:
         payload = response.json()
     except (json.JSONDecodeError, UnicodeDecodeError):
-        return _redact_secret(response.text, secret)[:500] or f"HTTP {response.status_code}"
+        return (
+            _redact_secret(response.text, secret)[:500]
+            or f"HTTP {response.status_code}"
+        )
     if isinstance(payload, Mapping):
         raw = payload.get("error", payload.get("detail", payload))
         if isinstance(raw, Mapping):
             message, code = raw.get("message"), raw.get("code")
-            details = [value for value in (code, message) if isinstance(value, str) and value]
+            details = [
+                value for value in (code, message) if isinstance(value, str) and value
+            ]
             if details:
                 return _redact_secret(": ".join(dict.fromkeys(details)), secret)[:500]
         if isinstance(raw, str) and raw:
@@ -1121,7 +1243,17 @@ def _redact_secret(message: str, secret: str) -> str:
 
 
 def _map_error(error: Exception) -> Exception:
-    if ModelError.matches(error, AuthenticationError, ContentSafetyError, ContextLengthError, InvalidRequestError, ModelTimeoutError, QuotaError, RateLimitError, TransportError):
+    if ModelError.matches(
+        error,
+        AuthenticationError,
+        ContentSafetyError,
+        ContextLengthError,
+        InvalidRequestError,
+        ModelTimeoutError,
+        QuotaError,
+        RateLimitError,
+        TransportError,
+    ):
         return error
     if isinstance(error, (httpx.ConnectError, httpx.ConnectTimeout)):
         # 连接建立失败可证明请求未发出：这是允许重试的正面证据。
@@ -1138,7 +1270,11 @@ def _map_error(error: Exception) -> Exception:
         # 已进入 HTTP 200 流：无论是否观察到 delta，远端效果都不可证。
         mapped = _map_error(error.error)
         if ModelError.matches(mapped):
-            mapped = ModelError.change(mapped, response_delta_seen=error.response_delta_seen, send_evidence=None)
+            mapped = ModelError.change(
+                mapped,
+                response_delta_seen=error.response_delta_seen,
+                send_evidence=None,
+            )
         else:
             setattr(mapped, "response_delta_seen", error.response_delta_seen)
         return mapped
@@ -1147,8 +1283,10 @@ def _map_error(error: Exception) -> Exception:
 
 def _retryable(error: Exception) -> bool:
     value = ModelError.read(error)
-    return value is not None and value.send_evidence in ("rejected", "unsent") and (
-        isinstance(value, (ModelTimeoutError, RateLimitError)) or value.retry_safe
+    return (
+        value is not None
+        and value.send_evidence in ("rejected", "unsent")
+        and (isinstance(value, (ModelTimeoutError, RateLimitError)) or value.retry_safe)
     )
 
 
@@ -1156,16 +1294,22 @@ def _json_object(response: httpx.Response) -> dict[str, Any]:
     try:
         payload = response.json()
     except (json.JSONDecodeError, UnicodeDecodeError) as error:
-        raise TransportError("provider response is not valid JSON").exception() from error
+        raise TransportError(
+            "provider response is not valid JSON"
+        ).exception() from error
     if not isinstance(payload, dict):
         raise TransportError("provider response must be a JSON object").exception()
     return cast(dict[str, Any], payload)
 
 
 def _credential_token(payload: Mapping[str, str]) -> str:
-    token = payload.get("access_token") or payload.get("api_key") or payload.get("token")
+    token = (
+        payload.get("access_token") or payload.get("api_key") or payload.get("token")
+    )
     if not token or not token.strip():
-        raise AuthenticationError("credential does not contain an API token").exception()
+        raise AuthenticationError(
+            "credential does not contain an API token"
+        ).exception()
     return token.strip()
 
 
@@ -1174,7 +1318,9 @@ def _check_credential_scope(
     credential: CredentialHandle,
 ) -> None:
     if credential.connection_id != descriptor.connection_id:
-        raise AuthenticationError("credential connection scope does not match").exception()
+        raise AuthenticationError(
+            "credential connection scope does not match"
+        ).exception()
     if credential.auth_identity != descriptor.auth_identity:
         raise AuthenticationError("credential auth identity does not match").exception()
 
@@ -1215,7 +1361,9 @@ def _estimate_context_tokens(
     complete = list(messages)
     if system_prompt and not (complete and complete[0].get("role") == "system"):
         complete.insert(0, {"role": "system", "content": system_prompt})
-    fixed_chars = len(json.dumps(tools, ensure_ascii=False, separators=(",", ":"), default=dict))
+    fixed_chars = len(
+        json.dumps(tools, ensure_ascii=False, separators=(",", ":"), default=dict)
+    )
     return max(1, fixed_chars // 3 + _estimate_message_tokens(complete))
 
 
@@ -1283,7 +1431,11 @@ def _estimate_message_tokens(messages: Sequence[Mapping[str, Any]]) -> int:
                         detail = image.get("detail", detail)
                     image_tokens += 1024 if detail == "low" else 8192
                     continue
-                text_chars += len(json.dumps(block, ensure_ascii=False, separators=(",", ":"), default=dict))
+                text_chars += len(
+                    json.dumps(
+                        block, ensure_ascii=False, separators=(",", ":"), default=dict
+                    )
+                )
         elif content is not None:
             text_chars += len(str(content))
         text_chars += len(
@@ -1323,7 +1475,9 @@ def _optional_int(value: object) -> int | None:
     if value is None:
         return None
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-        raise TransportError("usage token counts must be non-negative integers").exception()
+        raise TransportError(
+            "usage token counts must be non-negative integers"
+        ).exception()
     return value
 
 
