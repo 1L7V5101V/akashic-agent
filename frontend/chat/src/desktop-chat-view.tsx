@@ -1,4 +1,4 @@
-import { timelineReplyGroups, timelineToolResults, timelineInputStarts, timelineSourceKey, timelineSourceRefreshTokens } from "./message-timeline";
+import { timelineReplyGroups, timelineText, timelineToolResults, timelineInputStarts, timelineSourceKey, timelineSourceRefreshTokens } from "./message-timeline";
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useStickToBottomContext } from "use-stick-to-bottom";
 import { cycleTheme, useTheme } from "../../theme/src/theme-runtime";
@@ -33,6 +33,14 @@ export function DesktopChatView({ embeddedShell, controller }: DesktopChatViewPr
   const theme = useTheme();
   const rail = useSidebarRail();
   const composerApi = useRef<ComposerApi | null>(null);
+  // 空输入框按 ↑ 取回的上一条提问。
+  const lastInput = useMemo(() => {
+    for (let index = controller.timelineMessages.length - 1; index >= 0; index -= 1) {
+      const message = controller.timelineMessages[index];
+      if (message.body.kind === "input" && message.author === "user") return timelineText(message);
+    }
+    return "";
+  }, [controller.timelineMessages]);
   // 改一改再问：原文接在已有草稿之后，不覆盖用户正在写的内容。
   const editInput = useCallback((text: string) => composerApi.current?.insertDraft(text, { append: true }), []);
   const replyGroups = useMemo(() => timelineReplyGroups(controller.timelineMessages, controller.replyActivities), [controller.timelineMessages, controller.replyActivities]);
@@ -169,7 +177,7 @@ export function DesktopChatView({ embeddedShell, controller }: DesktopChatViewPr
             inputId={inputId} turnCompleted={replyAvailable !== false && inputResult.completed} modelState={modelState}
             selectedRuntimeId={selectedRuntimeId} selectedEffort={selectedReasoningEffort}
             replyTarget={replyTarget} onModelChange={handleModelChange} onCancelReply={cancelReply}
-            onSend={sendMessage} onStop={stopTurn}
+            onSend={sendMessage} onStop={stopTurn} lastInput={lastInput}
           />
           <ComposerStatsLine messages={timelineMessages} activities={replyActivities} connected={replyAvailable !== null} />
           {replyAvailable === false ? <p className="reply-unavailable" role="status">当前未加载回复插件</p> : null}

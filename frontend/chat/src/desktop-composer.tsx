@@ -30,7 +30,7 @@ const FLOATING_LAYER = "[role='dialog'], [role='menu'], [role='listbox'], [data-
 
 export const DesktopComposer = memo(function DesktopComposer({
   chatReady, canSend, modelProblem, draftKey, autoFocus = false, fresh = false, status, stopPending, stopCount, inputId, turnCompleted, modelState, selectedRuntimeId, selectedEffort, replyTarget,
-  onModelChange, onCancelReply, onSend, onStop, ref,
+  onModelChange, onCancelReply, onSend, onStop, lastInput = "", ref,
 }: {
   chatReady: boolean;
   canSend: boolean;
@@ -53,6 +53,8 @@ export const DesktopComposer = memo(function DesktopComposer({
   onCancelReply: () => void;
   onSend: (text: string, files: ComposerFile[]) => Promise<string | undefined>;
   onStop: () => void;
+  /** 当前会话最后一条用户提问；空输入框按 ↑ 取回编辑。 */
+  lastInput?: string;
   ref?: Ref<ComposerApi>;
 }) {
   // 标签页文本草稿是展示状态，既不上传，也不创建 Message。
@@ -145,6 +147,22 @@ export const DesktopComposer = memo(function DesktopComposer({
     const timer = window.setTimeout(() => setQueueRefused(false), 2400);
     return () => window.clearTimeout(timer);
   }, [queueRefused]);
+  const onComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    // 空输入框按 ↑ 取回上一条提问（终端与聊天工具的习惯）；有内容时 ↑ 仍是移动光标。
+    const native = event.nativeEvent;
+    if (event.key === "ArrowUp" && !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey
+      && !native.isComposing && !input && lastInput && !hasAttachments) {
+      event.preventDefault();
+      setInput(lastInput);
+      const textarea = event.currentTarget;
+      window.requestAnimationFrame(() => {
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        syncExpanded(textarea, textarea.value);
+      });
+      return;
+    }
+    queueOnEnter(event);
+  };
   const queueOnEnter = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     // 本轮未落定时，桌面键盘按回车把纯文字排到本轮之后。
     const native = event.nativeEvent;
@@ -208,7 +226,7 @@ export const DesktopComposer = memo(function DesktopComposer({
           className="composer__textarea !min-h-0"
           value={input}
           onChange={onInputChange}
-          onKeyDown={queueOnEnter}
+          onKeyDown={onComposerKeyDown}
           aria-label="消息"
           aria-describedby={modelProblem ? "chat-model-reason" : undefined}
           disabled={!chatReady}
