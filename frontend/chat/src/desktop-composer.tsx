@@ -148,8 +148,15 @@ export const DesktopComposer = memo(function DesktopComposer({
     return () => window.clearTimeout(timer);
   }, [queueRefused]);
   const onComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-    // 空输入框按 ↑ 取回上一条提问（终端与聊天工具的习惯）；有内容时 ↑ 仍是移动光标。
     const native = event.nativeEvent;
+    // 生成中在输入框按 Esc 停止本轮（coding 工具的中断习惯）；输入法组合中的 Esc 属于输入法。
+    if (event.key === "Escape" && !native.isComposing && native.keyCode !== 229
+      && isGeneratingChatStatus(status) && !stopPending) {
+      event.preventDefault();
+      onStop();
+      return;
+    }
+    // 空输入框按 ↑ 取回上一条提问（终端与聊天工具的习惯）；有内容时 ↑ 仍是移动光标。
     if (event.key === "ArrowUp" && !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey
       && !native.isComposing && !input && lastInput && !hasAttachments) {
       event.preventDefault();
@@ -516,6 +523,8 @@ function ComposerSubmit({ input, status, stopPending, onStop, disabled }: { inpu
     mode={generating ? "stop" : "send"}
     label={stopPending ? "正在停止" : status === "finalizing" ? "正在收尾" : status === "uploading" ? "取消上传" : generating ? "中止回答" : "发送消息"}
     type={generating ? "button" : "submit"}
+    title={generating && !stopping ? "中止回答（Esc）" : undefined}
+    aria-keyshortcuts={generating ? "Escape" : undefined}
     aria-disabled={stopping || undefined}
     onClick={generating ? (event) => {
       // 取消会把同一按钮变回 submit；先阻断这次点击的默认提交。
