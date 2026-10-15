@@ -80,6 +80,7 @@ export function DesktopChatView({ embeddedShell, controller }: DesktopChatViewPr
     pendingProjectsError, projects, projectsInstalled, startProjectChat, stopProject]);
   const activeTitle = sidebarSessions.find((session) => session.active)?.title || "新会话";
   const headingTitle = activeProject ? `${activeProject.name} / ${activeTitle}` : activeTitle;
+  useDocumentTitle(activeSessionId || activeProject ? headingTitle : "", isGeneratingChatStatus(status));
   const committed = new Set(timelineMessages.map((message) => message.id));
   const hasMessages = messages.length + timelineMessages.length + replyActivities.length > 0;
   // 读取已有会话期间就按会话版式摆放：输入区停在底部，消息到达时不从屏幕中央跳下来。
@@ -285,6 +286,24 @@ function DesktopHistoryLoader({
       ? <span role="status"><i className="desktop-history-loader__spinner" aria-hidden="true" />正在加载更早消息</span>
       : <button type="button" onClick={() => void load()}>↑ 更早的消息</button>}
   </div>;
+}
+
+// 标签页标题跟随当前会话，开着几个标签也分得清；页面在后台时本轮答完，标题前加"●"，回到页面即清除。
+function useDocumentTitle(title: string, generating: boolean): void {
+  const unseen = useRef(false);
+  const wasGenerating = useRef(generating);
+  // 必要 effect：document.title 与页面可见性都在 React 之外。
+  useEffect(() => {
+    if (wasGenerating.current && !generating && document.hidden) unseen.current = true;
+    wasGenerating.current = generating;
+    const apply = () => {
+      if (!document.hidden) unseen.current = false;
+      document.title = `${unseen.current ? "● " : ""}${title ? `${title} · ` : ""}Akashic`;
+    };
+    apply();
+    document.addEventListener("visibilitychange", apply);
+    return () => document.removeEventListener("visibilitychange", apply);
+  }, [title, generating]);
 }
 
 /** 时段问候只做一行小字；主标题保持"布置下一件事"的任务口吻。 */
