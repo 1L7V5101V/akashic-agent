@@ -377,11 +377,14 @@ function rememberReading(sessionId: string, position: ReadingPosition): void {
 }
 
 // 阅读区顶缘下的第一条消息：用 elementFromPoint 取，不逐条扫描；落在消息间隙时往下多探两次。
+// 横坐标取阅读列中线而不是滚动区中线：超宽屏阅读列偏左，滚动区中线会落在列外空白。
 function readingPosition(scroller: HTMLElement): ReadingPosition | null {
   const box = scroller.getBoundingClientRect();
+  const column = scroller.querySelector(".conversation-content")?.getBoundingClientRect() ?? box;
+  const x = column.left + column.width / 2;
   const top = box.top + readingTopInset(scroller);
   for (const dy of [2, 24, 48]) {
-    const hit = document.elementFromPoint(box.left + box.width / 2, top + dy)?.closest<HTMLElement>(".web-message-anchor[data-message-id]");
+    const hit = document.elementFromPoint(x, top + dy)?.closest<HTMLElement>(".web-message-anchor[data-message-id]");
     if (hit && scroller.contains(hit)) return { id: hit.dataset.messageId ?? "", offset: hit.getBoundingClientRect().top - box.top };
   }
   return null;

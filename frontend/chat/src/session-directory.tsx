@@ -103,7 +103,7 @@ function DirectoryMarker({ current, error, onRefresh }: {
       <Folder size={14} aria-hidden="true" />
       <span>{label}</span>
     </button>
-    {open ? <div className="directory-marker__panel" role="group" aria-label="工作目录">
+    {open ? <div className="directory-marker__panel" role="group" aria-label="工作目录" data-escape-layer="">
       <code className="directory-path">{current.path}</code>
       <p>{abnormal ? `${directoryStatus(current.status)}${current.error ? `：${current.error}` : ""}` : "此对话独立使用这个目录，不影响项目默认目录。"}</p>
       {current.agents.status === "ready" && current.agents.sources.length ? <p>

@@ -131,7 +131,7 @@ function JobPanel({ id, live, settled, now, settledOpen, onToggleSettled, onClea
   onToggleSettled: () => void;
   onClear: () => void;
 }) {
-  return <div id={id} className="job-list__panel" role="group" aria-label="后台任务">
+  return <div id={id} className="job-list__panel" role="group" aria-label="后台任务" data-escape-layer="">
     {live.length ? <>
       <p className="job-list__section" aria-hidden="true">进行中</p>
       <ul>{live.map((job) => <JobRow key={job.id} job={job} now={now} onStop={onStop} />)}</ul>
