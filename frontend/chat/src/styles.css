@@ -81,6 +81,13 @@ input {
 
 .message-renderer-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
+/* 键盘焦点的兜底：没写自己焦点样式的控件也用同一道 2px 墨线，不落回浏览器默认的 1px 蓝环。
+   :where 让特异性为 0，组件自己的 :focus-visible 规则照旧优先。 */
+:where(.chat-shell, [role="dialog"]) :where(button, a[href], summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid var(--ak-rule-focus);
+  outline-offset: 2px;
+}
+
 .chat-shell {
   /* Product aliases let shared message CSS follow one brand contract. */
   --chat-ink: var(--ak-ink-primary);
