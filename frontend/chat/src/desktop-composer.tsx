@@ -1,7 +1,7 @@
 import { Clock3, Paperclip, Undo2 } from "lucide-react";
 import { memo, useCallback, useEffect, useImperativeHandle, useRef, useState, type ChangeEvent, type FocusEvent, type KeyboardEvent as ReactKeyboardEvent, type Ref } from "react";
 import {
-  Attachment, AttachmentHoverCard, AttachmentHoverCardContent, AttachmentHoverCardTrigger,
+  Attachment, AttachmentFileBody, AttachmentHoverCard, AttachmentHoverCardContent, AttachmentHoverCardTrigger,
   AttachmentPreview, AttachmentRemove, Attachments, getAttachmentLabel, getMediaCategory,
 } from "@/components/ai-elements/attachments";
 import {
@@ -468,7 +468,7 @@ function ComposerAttachments({ onPresenceChange }: { onPresenceChange: (hasAttac
                   </div>
                   <AttachmentRemove className="attachment-remove-inline" />
                 </div>
-                {isMedia ? null : <span>{getAttachmentLabel(attachment)}</span>}
+                {isMedia ? null : <AttachmentFileBody name={getAttachmentLabel(attachment)} />}
               </Attachment>
             </AttachmentHoverCardTrigger>
             <AttachmentHoverCardContent>
