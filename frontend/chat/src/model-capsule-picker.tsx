@@ -1,5 +1,5 @@
 import { Check, ChevronDown, Eye, Search, Sparkles, Star } from "lucide-react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import codexIcon from "./assets/provider-icons/codex.svg";
 import deepseekIcon from "./assets/provider-icons/deepseek.svg";
 import opencodeIcon from "./assets/provider-icons/opencode.svg";
@@ -174,11 +174,13 @@ interface ModelRowProps {
   runtime: ChatModelRuntime;
   selected: boolean;
   favorite: boolean;
+  /** 所在分组已写明来源时不再逐行重复；收藏组混着不同来源，要写。 */
+  showProvider: boolean;
   onChoose: () => void;
   onToggleFavorite: () => void;
 }
 
-function ModelRow({ runtime, selected, favorite, onChoose, onToggleFavorite }: ModelRowProps) {
+function ModelRow({ runtime, selected, favorite, showProvider, onChoose, onToggleFavorite }: ModelRowProps) {
   return (
     <div
       className={`model-picker__option ${selected ? "is-selected" : ""}`}
@@ -205,7 +207,7 @@ function ModelRow({ runtime, selected, favorite, onChoose, onToggleFavorite }: M
         <strong>{runtime.model}</strong>
         <span className="model-picker__meta">
           <CapabilityMarks runtime={runtime} />
-          <em>{runtime.provider}</em>
+          {showProvider ? <em>{runtime.provider}</em> : null}
         </span>
       </span>
       <button
@@ -247,6 +249,8 @@ export function ModelCapsulePicker({
 }: ModelCapsulePickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  // 行内不再重复写来源，来源靠分组名承接：每组是 listbox 里的 group，组名指向可见标题。
+  const groupId = useId();
   const [favorites, setFavorites] = useState<string[]>(readFavorites);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -379,32 +383,33 @@ export function ModelCapsulePicker({
               </span>
             </div>
             {items.favorites.length ? (
-              <div className="model-picker__group">
-                <div className="model-picker__group-title"><Star size={12} aria-hidden="true" />收藏</div>
+              <div className="model-picker__group" role="group" aria-labelledby={`${groupId}-fav`}>
+                <div className="model-picker__group-title" role="presentation" id={`${groupId}-fav`}><Star size={12} aria-hidden="true" />收藏</div>
                 {items.favorites.map((runtime) => (
                   <ModelRow
                     key={`fav:${runtime.id}`}
                     runtime={runtime}
                     selected={runtime.id === selectedRuntimeId}
                     favorite
+                    showProvider
                     onChoose={() => choose(runtime)}
                     onToggleFavorite={() => toggleFavorite(runtime.id)}
                   />
                 ))}
               </div>
             ) : null}
-            {items.groups.map(([source, models]) => (
-              <div className="model-picker__group" aria-label={source} key={source}>
-                <div className="model-picker__group-title">
+            {items.groups.map(([source, models], index) => (
+              <div className="model-picker__group" role="group" aria-labelledby={`${groupId}-${index}`} key={source}>
+                <div className="model-picker__group-title" role="presentation" id={`${groupId}-${index}`}>
                   <GroupIcon runtime={models[0].runtime} />
                   {source}
-                  <span>{models.length}</span>
                 </div>
                 {models.map(({ runtime }) => (
                   <ModelRow
                     key={runtime.id}
                     runtime={runtime}
                     selected={runtime.id === selectedRuntimeId}
+                    showProvider={runtime.provider.toLowerCase() !== source.toLowerCase()}
                     favorite={items.favoriteSet.has(runtime.id)}
                     onChoose={() => choose(runtime)}
                     onToggleFavorite={() => toggleFavorite(runtime.id)}
@@ -487,8 +492,8 @@ export function ModelEffortAction({ runtime, effort, explicit, disabled, onChang
                 >
                   <Check size={14} className="model-picker__check" aria-hidden="true" />
                   <span className="model-picker__copy">
+                    {/* 只写中文档名：英文值是同一信息，第二行只会让每个选项高一倍。 */}
                     <strong>{EFFORT_LABELS[level] || level}</strong>
-                    <span className="model-picker__meta"><em>{level}</em></span>
                   </span>
                 </div>
               );
