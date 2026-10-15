@@ -1398,6 +1398,7 @@ input {
   gap: 20px;
   padding-block: 1.5rem calc(
     var(--composer-compact-h)
+    + var(--composer-grown, 0px)
     + var(--composer-dock-gap)
     + var(--composer-stats-line)
     + 1rem
@@ -1465,6 +1466,7 @@ input {
   translate: -50% 0;
   bottom: calc(
     var(--composer-compact-h)
+    + var(--composer-grown, 0px)
     + var(--composer-dock-gap)
     + var(--composer-stats-line)
     + 2.25rem
