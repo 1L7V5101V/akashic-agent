@@ -66,10 +66,11 @@ export type PromptInputProps = Omit<
   multiple?: boolean;
   /** 附件归属（会话草稿键）；变化时当前附件存到旧键名下，换出新键的那一份。 */
   attachmentKey?: string;
+  /** 可返回剩余草稿此后归属的键（新会话首次被接纳时拿到的会话 ID），未发出的附件随之迁过去。 */
   onSubmit: (
     message: PromptInputMessage,
     event: FormEvent<HTMLFormElement>
-  ) => void | Promise<void>;
+  ) => void | Promise<void | string | undefined>;
 };
 
 /** 管理当前表单的附件，发送成功后才释放对应的 Blob URL。 */
@@ -89,16 +90,24 @@ export const PromptInput = ({
 
   const [files, setFiles] = useState<(FileUIPart & { id: string })[]>([]);
   // 附件与草稿一样按会话保留：切走时存到旧会话名下，切回时取出，不跟到别的会话里被发出去。
-  const [parked, setParked] = useState<{ key: string; others: ReadonlyMap<string, (FileUIPart & { id: string })[]> }>(
-    () => ({ key: attachmentKey, others: new Map() }));
+  // carry：new: 草稿首次被接纳后，它的附件归属换成真实会话，键随后变过去时不算切会话。
+  const [parked, setParked] = useState<{ key: string; others: ReadonlyMap<string, (FileUIPart & { id: string })[]>; carry: { from: string; to: string } | null }>(
+    () => ({ key: attachmentKey, others: new Map(), carry: null }));
   if (parked.key !== attachmentKey) {
+    const owner = parked.carry?.from === parked.key ? parked.carry.to : parked.key;
     const others = new Map(parked.others);
-    if (files.length) others.set(parked.key, files);
-    else others.delete(parked.key);
+    if (files.length) others.set(owner, [...(others.get(owner) ?? []), ...files]);
     const restored = others.get(attachmentKey) ?? [];
     others.delete(attachmentKey);
-    setParked({ key: attachmentKey, others });
+    setParked({ key: attachmentKey, others, carry: null });
     setFiles(restored);
+  } else if (parked.others.has(attachmentKey)) {
+    // 接纳晚于切换时，迁到当前键名下的附件直接接回输入卡。
+    const others = new Map(parked.others);
+    const waiting = others.get(attachmentKey) ?? [];
+    others.delete(attachmentKey);
+    setParked({ ...parked, others });
+    setFiles([...waiting, ...files]);
   }
   // 卸载时读取最新附件（含存起来的），避免闭包持有旧列表而漏掉 Blob URL。
   const filesRef = useRef(files);
@@ -153,11 +162,24 @@ export const PromptInput = ({
           const rest = list.filter((file) => file.id !== id);
           if (rest.length) others.set(key, rest);
         }
-        return { key: prev.key, others };
+        return { ...prev, others };
       });
     },
     []
   );
+
+  // 把 from 名下尚未发出的附件交给 to：键还没变就记下 carry，已经变了就直接迁移停放的那份。
+  const adopt = useCallback((from: string, to: string) => {
+    setParked((prev) => {
+      const others = new Map(prev.others);
+      const moving = others.get(from);
+      if (moving) {
+        others.delete(from);
+        others.set(to, [...(others.get(to) ?? []), ...moving]);
+      }
+      return { key: prev.key, others, carry: prev.key === from ? { from, to } : prev.carry };
+    });
+  }, []);
 
   useEffect(() => {
     const target = formRef.current;
@@ -223,13 +245,15 @@ export const PromptInput = ({
 
       // 提交中的附件由本次发送持有；编辑器仍可接收下一份草稿。
       const submitted = files.map(({ id, ...file }) => ({ id, file }));
+      const submittedKey = attachmentKey;
       setSubmittedFileIds(submitted.map((item) => item.id));
       form.reset();
 
       try {
         // 原 Blob URL 直接交给上传 owner，成功后才释放，不做 Base64 往返转换。
-        await onSubmit({ files: submitted.map((item) => item.file), text }, event);
+        const owner = await onSubmit({ files: submitted.map((item) => item.file), text }, event);
         for (const item of submitted) remove(item.id);
+        if (typeof owner === "string" && owner !== submittedKey) adopt(submittedKey, owner);
       } catch {
         // 发送者显示失败原因；原附件保留供重试，不清除后来输入的内容。
       } finally {
@@ -237,7 +261,7 @@ export const PromptInput = ({
         setSubmittedFileIds([]);
       }
     },
-    [files, onSubmit, remove]
+    [files, onSubmit, remove, adopt, attachmentKey]
   );
 
   return (

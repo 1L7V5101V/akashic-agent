@@ -144,7 +144,9 @@ export const DesktopComposer = memo(function DesktopComposer({
         moveQueue(draftKey, sessionId);
         setDraft(sessionId, next);
         setDraft(draftKey, "");
+        return sessionId;
       }
+      return undefined;
     } catch (error) {
       const later = drafts.current.get(draftKey) || "";
       setDraft(draftKey, [text, later].filter(Boolean).join("\n\n"));
