@@ -195,6 +195,8 @@ class ContextBuilder:
             tools=tools,
             system_prompt="",
             max_output_tokens=max_output_tokens,
+            # Session 是本次请求所属的对话：provider 需要同值才能复用提示词缓存。
+            conversation_key=snapshot[-1].session_id if snapshot else "",
         )
         # 3. 估算只读取完整请求，不调用模型、裁切原文或持久发布摘要。
         if model.max_tool_schemas is not None and len(tools) > model.max_tool_schemas:

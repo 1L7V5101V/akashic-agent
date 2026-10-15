@@ -120,6 +120,9 @@ class ModelRequest:
     system_prompt: str = ""
     tool_choice: str | Mapping[str, Any] = "auto"
     prompt_cache_key: str | None = None
+    # 对话级路由与缓存亲和键：同一对话的各次请求必须同值。目前由 opencode_go
+    # driver 作为 x-opencode-session 发送，换值会让该 provider 侧的提示词缓存全部失效。
+    conversation_key: str = ""
     on_delta: StreamCallback | None = None
     continuation: ModelContinuation | None = None
     disable_reasoning: bool = False

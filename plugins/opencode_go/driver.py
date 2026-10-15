@@ -10,6 +10,7 @@ import asyncio
 import json
 import math
 import sqlite3
+import uuid
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -53,6 +54,9 @@ from plugins.models.contract import ModelDriverDefinition
 _DRIVER_ID = "opencode-go"
 _CONTRACT_VERSION = "1"
 _DEFAULT_ENDPOINT = "https://opencode.ai/zen/go/v1"
+_SESSION_HEADER = "x-opencode-session"
+# zen/go 要求客户端用自己的名字标识自己，而不是通用 SDK/HTTP 库名。
+_USER_AGENT = "akashic-agent"
 _MAX_TOOL_SCHEMAS = 16
 _MESSAGES_PREFIXES = ("minimax-", "qwen")
 _OPENCODE_DATA_DIR = Path.home() / ".local" / "share" / "opencode"
@@ -94,6 +98,10 @@ class _BoundChat:
         self._credential = credential
         self._descriptor = descriptor
         self._http = http
+        # 会话头优先取请求自带的对话键：同一对话跨轮稳定，网关才能复用提示词缓存。
+        # 标题、图像、摘要等旁路请求不带对话键，此时用本实例的兜底 id，
+        # 保证它们不被 zen/go 以 400 MissingSessionID 拒绝。
+        self._fallback_session_id = str(uuid.uuid4())
 
     @property
     def max_tool_schemas(self) -> int | None:
@@ -114,6 +122,8 @@ class _BoundChat:
         # 未带 request_key 的直调同样不得隐式重发（§6.3）。max_retries
         # 连接配置只留给 /models discovery 等非生成路径。
         connection = replace(self._connection, max_retries=0)
+        # 缺 x-opencode-session 时网关以 400 MissingSessionID 拒绝；同一对话共用同值。
+        session_id = request.conversation_key or self._fallback_session_id
         if request.on_delta is None:
             payload = await _request_json(
                 connection,
@@ -122,6 +132,7 @@ class _BoundChat:
                 "/chat/completions",
                 body=body,
                 http=self._http,
+                session_id=session_id,
             )
             return _parse_chat_response(payload)
         body["stream"] = True
@@ -132,6 +143,7 @@ class _BoundChat:
             body,
             request.on_delta,
             self._http,
+            session_id=session_id,
         )
 
     def estimate_context_tokens(
@@ -602,7 +614,7 @@ def _check_model_config(config: Mapping[str, Any]) -> None:
         or legacy_max_tools <= 0
     ):
         raise ValueError("legacy max_tool_schemas must be a positive integer or null")
-    if config.get("use_responses_lite", False) not in {False, 0}:
+    if config.get("use_responses_lite", False) not in (False, 0):
         raise ValueError("use_responses_lite belongs to a different driver")
     if config.get("reasoning_summary", "none") not in {"", "none"}:
         raise ValueError("reasoning_summary belongs to a different driver")
@@ -758,6 +770,7 @@ async def _request_json(
     *,
     body: Mapping[str, Any] | None = None,
     http: HttpClient,
+    session_id: str = "",
 ) -> dict[str, Any]:
     last_error: Exception | None = None
     for attempt in range(connection.max_retries + 1):
@@ -767,7 +780,7 @@ async def _request_json(
             # 只复用传输连接，不继承旧凭据请求产生的 Cookie。
             client.cookies.clear()
             response = await client.request(
-                method, path, json=body, headers={"Authorization": f"Bearer {token}"}
+                method, path, json=body, headers=_request_headers(token, session_id)
             )
             _raise_status(response, secret=token)
             return _json_object(response)
@@ -790,6 +803,8 @@ async def _stream_chat(
     body: Mapping[str, Any],
     on_delta: Callable[[dict[str, str]], Awaitable[None]],
     http: HttpClient,
+    *,
+    session_id: str = "",
 ) -> LLMResponse:
     last_error: Exception | None = None
     for attempt in range(connection.max_retries + 1):
@@ -803,7 +818,7 @@ async def _stream_chat(
                 "POST",
                 "/chat/completions",
                 json=body,
-                headers={"Authorization": f"Bearer {token}"},
+                headers=_request_headers(token, session_id),
             ) as response:
                 if response.status_code >= 400:
                     _ = await response.aread()
@@ -926,7 +941,7 @@ async def _consume_stream(
                     await _emit_delta(on_delta, {"content_delta": piece})
     except asyncio.CancelledError as error:
         if response_delta_seen:
-            setattr(error, "response_delta_seen", True)
+            cast(Any, error).response_delta_seen = True
         raise
     except _CallbackError:
         raise
@@ -970,10 +985,21 @@ async def _emit_delta(
         raise _CallbackError(error) from error
 
 
+def _request_headers(token: str, session_id: str = "") -> dict[str, str]:
+    """每次物理尝试的头部：凭据逐次读取，会话头只用于网关选择上游路由。"""
+
+    headers = {"Authorization": f"Bearer {token}"}
+    if session_id:
+        headers[_SESSION_HEADER] = session_id
+    return headers
+
+
 def _client(
     connection: _ConnectionConfig, token: str | None = None
 ) -> httpx.AsyncClient:
-    headers = {} if token is None else {"Authorization": f"Bearer {token}"}
+    headers = {"User-Agent": _USER_AGENT}
+    if token is not None:
+        headers["Authorization"] = f"Bearer {token}"
     timeout = httpx.Timeout(
         connect=connection.connect_timeout,
         read=connection.read_timeout,
@@ -1276,7 +1302,7 @@ def _map_error(error: Exception) -> Exception:
                 send_evidence=None,
             )
         else:
-            setattr(mapped, "response_delta_seen", error.response_delta_seen)
+            cast(Any, mapped).response_delta_seen = error.response_delta_seen
         return mapped
     return error
 
