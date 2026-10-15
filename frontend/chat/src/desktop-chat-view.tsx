@@ -1,4 +1,4 @@
-import { timelineReplyGroups, timelineText, timelineToolResults, timelineInputStarts, timelineSourceKey, timelineSourceRefreshTokens } from "./message-timeline";
+import { type TimelineMessage, timelineReplyGroups, timelineText, timelineToolResults, timelineInputStarts, timelineSourceKey, timelineSourceRefreshTokens } from "./message-timeline";
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useStickToBottomContext } from "use-stick-to-bottom";
 import { cycleTheme, useTheme } from "../../theme/src/theme-runtime";
@@ -29,18 +29,21 @@ interface DesktopChatViewProps {
   controller: DesktopChatController;
 }
 
+// 当前会话最后一条用户提问的正文。
+function lastUserInput(messages: readonly TimelineMessage[]): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.body.kind === "input" && message.author === "user") return timelineText(message);
+  }
+  return "";
+}
+
 export function DesktopChatView({ embeddedShell, controller }: DesktopChatViewProps) {
   const theme = useTheme();
   const rail = useSidebarRail();
   const composerApi = useRef<ComposerApi | null>(null);
   // 空输入框按 ↑ 取回的上一条提问。
-  const lastInput = useMemo(() => {
-    for (let index = controller.timelineMessages.length - 1; index >= 0; index -= 1) {
-      const message = controller.timelineMessages[index];
-      if (message.body.kind === "input" && message.author === "user") return timelineText(message);
-    }
-    return "";
-  }, [controller.timelineMessages]);
+  const lastInput = useMemo(() => lastUserInput(controller.timelineMessages), [controller.timelineMessages]);
   // 改一改再问：原文接在已有草稿之后，不覆盖用户正在写的内容。
   const editInput = useCallback((text: string) => composerApi.current?.insertDraft(text, { append: true }), []);
   const replyGroups = useMemo(() => timelineReplyGroups(controller.timelineMessages, controller.replyActivities), [controller.timelineMessages, controller.replyActivities]);
