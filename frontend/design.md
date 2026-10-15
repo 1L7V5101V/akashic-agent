@@ -95,7 +95,7 @@ composer 统计行活动期只显示静态文案（不逐秒更新可见文本�
 
 ### 3.10 侧栏宽度拖拽合同
 
-宽屏（>820px）侧栏右缘提供 8px 透明拖拽热区，hover/drag/focus 显 1px `var(--ak-rule-strong)` 竖向强调线。拖拽只写 `--chat-rail-width` 一个值，写在被消费的 grid 容器（`.chat-shell-body`）inline style 上，范围钳制 15–26rem；双击复位（移除 inline 覆盖，回到 CSS clamp 默认）。拖拽柄同时是键盘 separator（`role="separator"`、`aria-orientation="vertical"`、左右方向键步进 0.5rem）。偏好持久化 localStorage（`akashic.chat.rail-width`），首次渲染前同步读取。窄屏（≤820px）与抽屉内不渲染拖拽柄。
+宽屏（>820px）侧栏右缘提供 8px 透明拖拽热区，hover/drag/focus 显 1px `var(--ak-rule-strong)` 竖向强调线。拖拽只写 `--chat-rail-width` 一个值，写在被消费的 grid 容器（`.chat-shell-body`）inline style 上，范围钳制 15–26rem；双击复位（移除 inline 覆盖，回到 CSS clamp 默认）。拖拽柄同时是键盘 separator（`role="separator"`、`aria-orientation="vertical"`、左右方向键步进 0.5rem）。偏好持久化 localStorage（`akashic.chat.rail-width`），首次渲染前同步读取。窄屏（≤820px）与抽屉内不渲染拖拽柄。导航抽屉打开期间视口离开紧凑断点（平板旋转、分屏拖宽）时抽屉自动关闭：常驻侧栏已经回来，不能留一层模态遮罩压住整页。
 
 ### 3.11 会话排序投影合同
 
