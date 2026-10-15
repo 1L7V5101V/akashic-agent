@@ -214,7 +214,12 @@ export const AttachmentPreview = ({
       return renderAttachmentImage(data.url, data.filename, variant === "grid");
     }
     if (mediaCategory === "video" && data.type === "file" && data.url) {
-      return <video className="size-full object-cover" muted src={data.url} />;
+      // 解不出首帧（编码不支持、文件损坏）时 video 什么都不画；垫上视频图标和文件名，能解码时首帧盖住它们。
+      return <span className="relative grid size-full content-center justify-items-center gap-1">
+        {renderIcon(VideoIcon)}
+        {variant === "grid" && data.filename ? <span className="max-w-full truncate px-2 text-xs">{data.filename}</span> : null}
+        <video className="absolute inset-0 size-full object-cover" muted preload="metadata" src={data.url} />
+      </span>;
     }
     const Icon = mediaCategoryIcons[mediaCategory];
     return fallbackIcon ?? renderIcon(Icon);
