@@ -2941,6 +2941,10 @@ form.composer:focus-within [data-slot="input-group"] {
   .directory-marker__trigger { width: 44px; height: 44px; justify-content: center; padding: 0; }
   .directory-marker__trigger span { display: none; }
   .directory-marker__trigger svg { width: 18px; height: 18px; }
+  /* 图标不再贴右缘，面板改为相对标题栏左右各留 16px 铺开，不从屏幕左边溢出。 */
+  .conversation-heading:has(.directory-marker) { position: relative; }
+  .directory-marker { position: static; }
+  .directory-marker__panel { inset-inline: 16px; inline-size: auto; }
 
   /* 回到底部只留 36px 圆钮，少压正文；生成中的呼吸点挂在右上角。 */
   .reading-return[data-label] { width: 36px; padding: 0; }
