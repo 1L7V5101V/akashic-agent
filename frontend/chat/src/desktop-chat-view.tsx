@@ -22,6 +22,7 @@ import { DesktopSidebar } from "./desktop-sidebar";
 import { useSidebarRail } from "./use-sidebar-rail";
 import type { DesktopChatController } from "./use-desktop-chat-controller";
 import { SessionDirectory } from "./session-directory";
+import { SelectionQuote } from "./selection-quote";
 import { isGeneratingChatStatus, lastInputResult } from "./web-chat-status";
 
 interface DesktopChatViewProps {
@@ -164,6 +165,7 @@ export function DesktopChatView({ embeddedShell, controller }: DesktopChatViewPr
             timelineMessages={timelineMessages} replyActivities={replyActivities} />
           <NarrowReadingChrome />
           <ReadingReturnButton generating={isGeneratingChatStatus(status)} />
+          {hasMessages ? <SelectionQuote onQuote={editInput} /> : null}
           <SessionReadingMemory sessionId={activeSessionId}
             ready={!historyLoading && timelineMessages.at(-1)?.session_id === activeSessionId
               ? `${timelineMessages.length}:${timelineMessages[0]?.id ?? ""}` : ""} />
