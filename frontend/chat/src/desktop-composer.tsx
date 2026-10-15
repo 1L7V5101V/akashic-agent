@@ -225,6 +225,8 @@ export const DesktopComposer = memo(function DesktopComposer({
       onRejectFiles={rejectFiles}
       data-draft-version={draftVersion}
       onSubmit={(message) => {
+        // 提示是关于这次输入的；发出后输入卡收成紧凑条，不该把上一条提示带进去。
+        setNotice(null);
         // 触屏发送后收起键盘、输入卡回到静止态：接下来是读回复，半屏键盘和展开的工具行只会挡住它。
         if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
           setEngaged(false);
