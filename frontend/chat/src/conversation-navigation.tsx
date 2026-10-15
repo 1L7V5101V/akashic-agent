@@ -200,6 +200,8 @@ export function ConversationSessionRow({ session, pendingSessionId, onActivate, 
   const armTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const renameCancelledRef = useRef(false);
+  // 回车提交后输入框转为 disabled 会触发 blur，blur 也提交：同一次编辑只发一次请求。
+  const renameInFlightRef = useRef(false);
   useEffect(() => () => {
     if (armTimer.current !== null) clearTimeout(armTimer.current);
   }, []);
@@ -219,17 +221,19 @@ export function ConversationSessionRow({ session, pendingSessionId, onActivate, 
     setRenaming(false);
   };
   const commitRename = async () => {
-    if (renameCancelledRef.current || !renaming || !onRename) return;
+    if (renameCancelledRef.current || renameInFlightRef.current || !renaming || !onRename) return;
     const title = renameValue.trim();
     if (title === session.title.trim()) {
       setRenaming(false);
       return;
     }
+    renameInFlightRef.current = true;
     setRenameBusy(true);
     try {
       await onRename(title);
       setRenaming(false);
     } finally {
+      renameInFlightRef.current = false;
       setRenameBusy(false);
     }
   };
