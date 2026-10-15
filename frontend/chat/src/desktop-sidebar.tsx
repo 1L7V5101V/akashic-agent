@@ -188,7 +188,7 @@ function useSidebarShortcuts(sidebarRef: RefObject<HTMLElement | null>, searchRe
 
 // 快捷键散在各处（输入框、侧栏、阅读区），只有 title 提示时几乎没人发现；这里集中列一份。
 // "?" 会被阅读时直接打字进入输入框接走，所以入口是 Ctrl+/（Slack、Linear 的习惯）和侧栏底部的键盘图标。
-function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+function ShortcutsDialog({ open, onOpenChange, returnFocus }: { open: boolean; onOpenChange: (open: boolean) => void; returnFocus: () => void }) {
   const mod = SHORTCUT_MOD === "⌘" ? "⌘" : "Ctrl";
   const groups: { title: string; items: [string, string[]][] }[] = [
     { title: "输入", items: [
@@ -205,7 +205,7 @@ function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
     ] },
   ];
   return <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent className="shortcuts-dialog">
+    <DialogContent className="shortcuts-dialog" onCloseAutoFocus={(event) => { event.preventDefault(); returnFocus(); }}>
       <DialogHeader>
         <DialogTitle>键盘快捷键</DialogTitle>
         <DialogDescription className="sr-only">聊天界面可用的键盘快捷键</DialogDescription>
@@ -300,7 +300,23 @@ export const DesktopSidebar = memo(function DesktopSidebar({
   const sidebarRef = useRef<HTMLElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const openShortcuts = useCallback(() => setShortcutsOpen(true), []);
+  // 面板没有固定触发按钮（输入框里按快捷键也能打开）：打开前记下焦点与光标，关闭后放回原处接着写。
+  const shortcutsReturn = useRef<{ element: HTMLElement; selection: [number, number] | null } | null>(null);
+  const openShortcuts = useCallback(() => {
+    const element = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+    const field = element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement ? element : null;
+    shortcutsReturn.current = element ? { element, selection: field && field.selectionStart !== null && field.selectionEnd !== null ? [field.selectionStart, field.selectionEnd] : null } : null;
+    setShortcutsOpen(true);
+  }, []);
+  const returnShortcutsFocus = useCallback(() => {
+    const target = shortcutsReturn.current;
+    shortcutsReturn.current = null;
+    if (!target?.element.isConnected) return;
+    target.element.focus({ preventScroll: true });
+    if (target.selection && (target.element instanceof HTMLTextAreaElement || target.element instanceof HTMLInputElement)) {
+      target.element.setSelectionRange(...target.selection);
+    }
+  }, []);
   useSidebarShortcuts(sidebarRef, searchRef, onNewChat, openShortcuts);
   const [directoryProjectId, setDirectoryProjectId] = useState("");
   const [sessionSort, setSessionSort] = useState(readSessionSort);
@@ -608,7 +624,7 @@ export const DesktopSidebar = memo(function DesktopSidebar({
           </button>
         </div>
       </div>
-      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} returnFocus={returnShortcutsFocus} />
       {rail ? <SidebarRailResizer rail={rail} sidebarRef={sidebarRef} /> : null}
       {directoryProject && projects ? <ProjectDirectoryDialog project={directoryProject}
         onClose={() => setDirectoryProjectId("")} onChoose={(path) => projects.onBindDirectory(directoryProject.id, path)}

@@ -120,7 +120,7 @@ function PlainCodeCopy({ code }: { code: string }) {
   </button>;
 }
 
-// 横滚发生在高亮组件的 shadow DOM 里，触屏滚动条是浮层，看不出右边还有字。
+// 横滚发生在高亮组件的 shadow DOM 里（生成中则是普通 pre），触屏滚动条是浮层，看不出右边还有字。
 // 量出滚动位置写到外层 data-overflow（start / end），样式在对应边缘渐隐。
 function useCodeOverflowEdges(ref: RefObject<HTMLDivElement | null>): void {
   useEffect(() => {
@@ -130,9 +130,10 @@ function useCodeOverflowEdges(ref: RefObject<HTMLDivElement | null>): void {
     let scroller: HTMLElement | null = null;
     const resize = new ResizeObserver(() => measure());
     const contents = new MutationObserver(() => measure());
-    // 1. 每次测量都重新找滚动元素：高亮完成前后 shadow 里的节点会被替换。
+    // 1. 每次测量都重新找滚动元素：高亮完成前后 shadow 里的节点会被替换；没有高亮宿主时量自身的 pre。
     const measure = () => {
-      scroller = root ? [...root.querySelectorAll<HTMLElement>("pre, code")].find((el) => el.scrollWidth > el.clientWidth + 1) ?? null : null;
+      const scope: ParentNode = root ?? wrapper;
+      scroller = [...scope.querySelectorAll<HTMLElement>("pre, code")].find((el) => el.scrollWidth > el.clientWidth + 1) ?? null;
       const start = scroller !== null && scroller.scrollLeft > 1;
       const end = scroller !== null && scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1;
       const next = [start ? "start" : "", end ? "end" : ""].filter(Boolean).join(" ");
@@ -150,11 +151,16 @@ function useCodeOverflowEdges(ref: RefObject<HTMLDivElement | null>): void {
       contents.observe(root, { childList: true, subtree: true });
       measure();
     };
-    const mounts = new MutationObserver(attach);
-    mounts.observe(wrapper, { childList: true, subtree: true });
+    // 3. 流式正文增长同样走这里：子树变化后重新接宿主并测量。
+    const mounts = new MutationObserver(() => { attach(); measure(); });
+    mounts.observe(wrapper, { childList: true, subtree: true, characterData: true });
+    wrapper.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    resize.observe(wrapper);
     attach();
+    measure();
     return () => {
       mounts.disconnect();
+      wrapper.removeEventListener("scroll", onScroll, true);
       contents.disconnect();
       resize.disconnect();
       root?.removeEventListener("scroll", onScroll, true);
@@ -178,6 +184,15 @@ function HighlightedCode(props: NodeComponentProps<CodeData>) {
   </div>;
 }
 
+// 生成中的代码不高亮，但横滚提示与落定后一致。
+function StreamingCode({ node }: { node: CodeData }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useCodeOverflowEdges(ref);
+  return <div ref={ref} className="reading-code-scroll">
+    <PreCodeNode node={node} showLineNumbers={false} />
+  </div>;
+}
+
 /** 纯文本始终是无标题阅读面，带语言的代码仍使用原高亮与流式路径。 */
 export function ReadingCode({ node, ctx, isDark }: NodeComponentProps<CodeData>) {
   if (isPlainTextLanguage(node.language)) {
@@ -186,6 +201,6 @@ export function ReadingCode({ node, ctx, isDark }: NodeComponentProps<CodeData>)
       <PlainCodeCopy code={node.code} />
     </div>;
   }
-  if (ctx?.renderCodeBlocksAsPre) return <PreCodeNode node={node} showLineNumbers={false} />;
+  if (ctx?.renderCodeBlocksAsPre) return <StreamingCode node={node} />;
   return <HighlightedCode node={node} ctx={ctx} isDark={isDark} />;
 }
