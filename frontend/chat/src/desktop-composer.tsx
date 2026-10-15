@@ -157,7 +157,7 @@ export const DesktopComposer = memo(function DesktopComposer({
     }
   }, [canSend, modelProblem, expanded, onSend, setInput, setDraft, draftKey, moveQueue]);
   // 输入卡内一行轻提示（排队被拒、附件超限），自动消失；同一时间只有一条。
-  const [notice, setNotice] = useState<{ text: string; ms: number } | null>(null);
+  const [notice, setNotice] = useState<{ text: string; ms: number; title?: string } | null>(null);
   useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(null), notice.ms);
@@ -165,8 +165,10 @@ export const DesktopComposer = memo(function DesktopComposer({
   }, [notice]);
   const rejectFiles = useCallback((files: File[]) => {
     const names = files.map((file) => file.name || "未命名");
-    const label = names.length > 1 ? `${names[0]} 等 ${names.length} 个文件` : names[0];
-    setNotice({ text: `${label} 超过 ${MAX_ATTACHMENT_MB}MB，未添加`, ms: 4000 });
+    // 过长的文件名中间省略：开头与带扩展名的结尾最能区分文件，完整名称放在 title 里。
+    const first = [...names[0]].length > 40 ? `${[...names[0]].slice(0, 20).join("")}…${[...names[0]].slice(-16).join("")}` : names[0];
+    const label = names.length > 1 ? `${first} 等 ${names.length} 个文件` : first;
+    setNotice({ text: `${label} 超过 ${MAX_ATTACHMENT_MB}MB，未添加`, ms: 4000, title: names.join("\n") });
   }, []);
   const onComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     const native = event.nativeEvent;
@@ -257,7 +259,7 @@ export const DesktopComposer = memo(function DesktopComposer({
           <Undo2 size={18} aria-hidden="true" />
         </button>
       </div> : null}
-      {notice ? <p className="composer-queue-refused" role="status">{notice.text}</p> : null}
+      {notice ? <p className="composer-queue-refused" role="status" title={notice.title}>{notice.text}</p> : null}
       {fileDragActive ? <div className="composer-drop-hint" aria-hidden="true">松开以添加文件</div> : null}
       <PromptInputBody>
         <ComposerAttachments onPresenceChange={setHasAttachments} />

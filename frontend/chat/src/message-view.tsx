@@ -558,9 +558,10 @@ export function TimelineMessageView({ message, lookupMessage, toolResults, onNav
   };
   // 与实时消息同一个容器（间距、顶对齐）；用户消息附件在正文上方，发出时与刷新后位置一致。
   const looseAttachments = message.attachments.filter((ref) => !referencedArtifacts.has(ref.artifact_id));
-  const attachmentList = looseAttachments.length ? <Attachments className="message-attachments" variant="grid">
-    {looseAttachments.map((ref, index) => <Fragment key={`${ref.artifact_id}:${index}`}>{attachment(ref.artifact_id)}</Fragment>)}
-  </Attachments> : null;
+  // 工具结果插图沿正文宽度展示，不进缩略图容器；组件自带的 ml-auto/w-fit 会把附件推到右侧，这里显式去掉。
+  const looseItems = looseAttachments.map((ref, index) => <Fragment key={`${ref.artifact_id}:${index}`}>{attachment(ref.artifact_id)}</Fragment>);
+  const attachmentList = !looseAttachments.length ? null : attachmentResult ? looseItems
+    : <Attachments className="message-attachments ml-0 w-auto" variant="grid">{looseItems}</Attachments>;
   return <div className={`message-row timeline-message timeline-${body.kind}`}>
     <div className={body.kind === "input" ? "user-bubble" : "agent-content"}>
       {leadingContent}
@@ -750,7 +751,7 @@ const outcomeLabels = { success: "成功", denied: "已拒绝", error: "失败",
 
 const MessageAttachments = memo(function MessageAttachments({ attachments }: { attachments: MessageAttachment[] }) {
   return (
-    <Attachments className="message-attachments" variant="grid">
+    <Attachments className="message-attachments ml-0 w-auto" variant="grid">
       {attachments.map((attachment) => (
         <MessageAttachmentItem attachment={attachment} key={attachment.id} />
       ))}
