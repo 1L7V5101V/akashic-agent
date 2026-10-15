@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 /** 只显示宿主执行连接状态；恢复连接不会恢复已经失效的命令句柄。 */
-/** paused：聊天连接本身断开时宿主状态无从确认，同源提示交给连接状态行，这里不再重复。 */
+/** paused：聊天连接本身断开时宿主状态无从确认，同源提示交给连接状态行或发送错误行，这里不再重复。 */
 export function HostBridgeNotice({ paused = false }: { paused?: boolean }) {
   const [notice, setNotice] = useState("");
   useEffect(() => {

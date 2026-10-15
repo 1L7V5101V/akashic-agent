@@ -188,7 +188,7 @@ export function DesktopChatView({ embeddedShell, controller }: DesktopChatViewPr
             <i aria-hidden="true" />连接已断开，正在重新连接…
             <button type="button" onClick={retry}>立即重试</button>
           </p> : null}
-          <HostBridgeNotice paused={controller.reconnecting} />
+          <HostBridgeNotice paused={controller.connectionLost} />
           {error ? <div className="error-line" role="alert"><span>{error}</span>
             <MaterialButton variant="danger" onClick={retry}>重试</MaterialButton>
           </div> : null}
