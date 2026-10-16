@@ -84,7 +84,7 @@ export function ProjectDirectoryDialog({ project, onClose, onChoose, onCloseFocu
       <DialogDescription>{project?.directory ? "这个项目的目录已固定。已有对话的工作目录各自独立。"
         : project ? "目录可不设置。首次绑定后不可更改或清空；已有对话不变。"
           : "这里只选择目录；创建项目时才保存。"}</DialogDescription>
-      <p className="directory-notice">目录来自运行 Akashic 工具的执行主机。连接远程服务时，不是当前浏览器所在电脑的目录。</p>
+      <p className="directory-notice">目录来自运行 Nexus 工具的执行主机。连接远程服务时，不是当前浏览器所在电脑的目录。</p>
       {project?.directory ? <div>
         <p className="directory-path">{project?.directory}</p>
         <p role="status">{loading ? "正在检查执行主机…" : state ? directoryStatus(state.status) : "状态未能读取"}</p>

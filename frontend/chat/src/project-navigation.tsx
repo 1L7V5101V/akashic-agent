@@ -299,7 +299,7 @@ export function NewProjectDialog({
           </DialogDescription>
           <div className="project-dialog__directory">
             <strong>默认目录（可选）</strong>
-            <p>选择运行 Akashic 工具的执行主机上的目录；远程服务使用远程主机，不是浏览器所在电脑。</p>
+            <p>选择运行 Nexus 工具的执行主机上的目录；远程服务使用远程主机，不是浏览器所在电脑。</p>
             <div className="project-dialog__directory-choice">
               <span className="directory-path">{directory ?? "未设置"}</span>
               <button ref={directoryButton} type="button" disabled={submitting} onClick={() => setChoosingDirectory(true)}>

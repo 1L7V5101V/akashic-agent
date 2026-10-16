@@ -516,7 +516,7 @@ export const DesktopSidebar = memo(function DesktopSidebar({
         <div className="chat-sidebar__brand-row">
           <span className="chat-sidebar__brand">
             <span className="chat-sidebar__mark" style={brandMask} aria-hidden="true" />
-            <strong>Akashic</strong>
+            <strong>Nexus</strong>
           </span>
           <button type="button" className="chat-sidebar__new" aria-label="新会话" title={`新会话（${SHORTCUT_MOD}+Shift+O）`} onClick={() => onNewChat()}>
             <MessageSquarePlus size={18} strokeWidth={1.75} aria-hidden="true" />

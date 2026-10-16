@@ -288,7 +288,7 @@ async function measureDesktopResponsive(browserInstance, origin) {
   await page.keyboard.press("Escape");
   const metric = { navigationFocusRestored: await navigationTrigger.evaluate((element) => document.activeElement === element ? 1 : 0) };
   await navigationTrigger.click();
-  await page.getByRole("dialog", { name: "Akashic 导航" }).getByRole("button", { name: /性能基线会话/u }).click();
+  await page.getByRole("dialog", { name: "Nexus 导航" }).getByRole("button", { name: /性能基线会话/u }).click();
   await page.locator(".web-message-anchor").last().waitFor();
   metric.chatOverflowPx = await horizontalOverflow(page);
   metric.composerVisible = await page.locator(".composer__textarea").isVisible() ? 1 : 0;

@@ -360,7 +360,7 @@ function useDocumentTitle(title: string, generating: boolean): void {
     wasGenerating.current = generating;
     const apply = () => {
       if (!document.hidden) unseen.current = false;
-      document.title = `${unseen.current ? "● " : ""}${title ? `${title} · ` : ""}Akashic`;
+      document.title = `${unseen.current ? "● " : ""}${title ? `${title} · ` : ""}Nexus Companion`;
     };
     apply();
     document.addEventListener("visibilitychange", apply);
@@ -388,7 +388,7 @@ function DesktopEmptyState({ shellStatus, modelProblem }: { shellStatus: string 
       <p>服务可能正在启动、已停用或启动失败。连接恢复后，这个页面会自动更新。</p>
       <a href="/">查看管理面板</a>
     </div> : shellStatus === "starting" ? <div className="model-connection-state">
-      <span>正在启动</span><h1>Akashic 正在准备对话</h1>
+      <span>正在启动</span><h1>Nexus 正在准备对话</h1>
       <p>这个页面会自动恢复，不需要切换端口或刷新浏览器。</p>
       <a href="/#models">查看模型设置</a>
     </div> : shellStatus === null ? (

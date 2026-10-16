@@ -446,10 +446,10 @@ function Shell({ pages, railActions, settings, settingsPlugins, http }: {
   const showBand = bandEntries.length > 1;
   return <div className={`unified-shell${showBand ? " has-band" : ""}`}>
     {withdrawn && <p role="status" className="config-hint">所选页面暂不可用，已自动切换至默认页面。可在功能设置中查看已安装功能。</p>}
-    {showBand && <header className="product-band" aria-label="Akashic 主导航">
-      <div className="product-band__brand" title="Akashic">
+    {showBand && <header className="product-band" aria-label="Nexus 主导航">
+      <div className="product-band__brand" title="Nexus">
         <img src={akashicBrandIcon} alt="" />
-        <strong>Akashic</strong>
+        <strong>Nexus</strong>
       </div>
       <nav
         className="product-band__nav"

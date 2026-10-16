@@ -208,7 +208,7 @@ function enterStep(element: HTMLDivElement | null): void {
 function Surface({children, onCancel}: {children: React.ReactNode; onCancel: () => void}) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => { const dialog = ref.current!; dialog.showModal(); return () => dialog.close(); }, []);
-  return <dialog ref={ref} className="onboarding-surface" aria-label="Akashic 新手引导"
+  return <dialog ref={ref} className="onboarding-surface" aria-label="Nexus 新手引导"
     onCancel={event => { event.preventDefault(); onCancel(); }}>{children}</dialog>;
 }
 
@@ -216,7 +216,7 @@ function TopBar({phases, at, onLater}: {phases: Phase[]; at: number; onLater?: (
   const middle = phases.length - 2;
   const showProgress = at > 0 && at < phases.length - 1;
   return <header className="onboarding-top">
-    <span className="onboarding-brand"><i className="onboarding-mark" style={brandMask} aria-hidden="true" /><span>Akashic</span></span>
+    <span className="onboarding-brand"><i className="onboarding-mark" style={brandMask} aria-hidden="true" /><span>Nexus</span></span>
     {showProgress ? <div className="onboarding-progress" role="progressbar" aria-label="引导进度" aria-valuemin={1} aria-valuemax={middle} aria-valuenow={at}>
       {Array.from({length: middle}, (_, i) => <i key={i} className={i + 1 < at ? "is-done" : i + 1 === at ? "is-now" : ""} />)}
     </div> : <span />}
@@ -246,7 +246,7 @@ function Welcome({catalog, start, skip}: {catalog: Catalog; start: () => void; s
   const required = catalog.groups.filter(group => group.required);
   return <div className="onboarding-welcome">
     <i className="onboarding-mark is-large" style={brandMask} aria-hidden="true" />
-    <h2 tabIndex={-1}>你好，我是 Akashic</h2>
+    <h2 tabIndex={-1}>你好，我是 Nexus</h2>
     <p className="onboarding-lead">先花两三分钟让我能说话，其余能力随时可以再开。</p>
     <ol className="onboarding-promise">
       {required.map(group => <li key={group.key}><span>{group.pitch || group.title}</span><em>必需</em></li>)}

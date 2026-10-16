@@ -60,9 +60,9 @@ export function MessageReplyReference({
       type="button"
       onClick={onNavigate}
       disabled={unavailable && !canLoad}
-      aria-label={`查看引用的 ${author ?? (role === "assistant" ? "Akashic" : "你")} 消息`}
+      aria-label={`查看引用的 ${author ?? (role === "assistant" ? "Nexus" : "你")} 消息`}
     >
-      <span>{author ?? (role === "assistant" ? "Akashic" : "你")}</span>
+      <span>{author ?? (role === "assistant" ? "Nexus" : "你")}</span>
       <p aria-live="polite">{unavailable ? "原消息不在当前记录中" : preview}</p>
     </button>
   );
@@ -71,7 +71,7 @@ export function MessageReplyReference({
 // 引用条显示给人看的名字：内部角色名不外露，其它来源（渠道用户名等）原样显示。
 function replyAuthorLabel(author: string | undefined, role: ReplyRole | undefined): string {
   const who = author ?? role;
-  if (who === "assistant") return "Akashic";
+  if (who === "assistant") return "Nexus";
   if (who === "user" || who === undefined) return "你";
   return who;
 }
