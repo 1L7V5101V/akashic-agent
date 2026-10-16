@@ -115,7 +115,7 @@ export class AgentCursor {
     this.glyph.innerHTML = `<svg viewBox="0 0 24 24"><path class="computer-agent-arrow"
       d="M3 2 L10 21 L12.6 13.4 L20 11 Z"/></svg>`;
     this.badge.className = "computer-agent-badge";
-    this.badge.innerHTML = `<i></i><span>Akashic</span>`;
+    this.badge.innerHTML = `<i></i><span>Nexus</span>`;
     this.pointer.append(this.glyph, this.badge);
     this.layer.append(this.glow, this.ripple, this.pointer);
     this.notice.className = "computer-cursor-notice";

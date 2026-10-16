@@ -57,12 +57,12 @@ const NO_FRAME = { kind: "none", legend: "" } as const;
 
 // 没有画面的情况：运行时未就绪、连接未建立或已失效。按严重程度从高到低判断。
 function withoutScreen(f: PanelFacts): PanelView | null {
-  if (f.link === "stale") return blank("warn", "Akashic 已更新", "刷新页面后才能继续看画面",
+  if (f.link === "stale") return blank("warn", "Nexus 已更新", "刷新页面后才能继续看画面",
     { icon: "refresh", text: "刷新页面后才能继续看画面，电脑里的任务不受影响。",
       actions: [{ id: "reload", label: "刷新页面", emphasis: "primary" }] });
   // 读不到状态时不猜运行时和连接；已连上的画面不依赖轮询，继续显示。
   if (f.statusError && f.link !== "connected") return blank("warn", "读不到电脑状态", "每秒自动重试",
-    { icon: "alert", text: "Akashic 暂时没有返回电脑状态，正在每秒重试。持续出现时请确认电脑容器在运行。",
+    { icon: "alert", text: "Nexus 暂时没有返回电脑状态，正在每秒重试。持续出现时请确认电脑容器在运行。",
       actions: [], details: f.statusError });
   if (f.restartRequested && f.runtime !== "ready") return blank("busy", "正在重启电脑", "会先结束卡住的进程，再重新启动",
     { icon: "spinner", text: "正在结束卡住的进程并重新启动电脑…", actions: [] });
