@@ -1,9 +1,11 @@
 FROM node:22-bookworm-slim AS node
 FROM python:3.12-slim-bookworm AS source
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
+# 仓库地址可覆盖：默认为上游，fork 构建时传自己的地址（不带 .git 后缀）。
+ARG AKASHIC_REPOSITORY=https://github.com/kachofugetsu09/akashic-agent
 ARG AKASHIC_REVISION
 WORKDIR /source
-RUN git init && git remote add origin https://github.com/kachofugetsu09/akashic-agent.git \
+RUN git init && git remote add origin "${AKASHIC_REPOSITORY}.git" \
     && git fetch --depth=1 origin "${AKASHIC_REVISION}" && git checkout --detach FETCH_HEAD
 
 FROM python:3.12-slim-bookworm AS build
@@ -22,8 +24,9 @@ RUN /opt/venv/bin/python scripts/build_plugin_distribution.py --revision HEAD --
     && /opt/venv/bin/python -c "from pathlib import Path; from scripts.install_plugin_distribution import extract_core; extract_core(Path('/opt/distribution'), Path('/opt/core'))"
 
 FROM python:3.12-slim-bookworm
+ARG AKASHIC_REPOSITORY=https://github.com/kachofugetsu09/akashic-agent
 ARG AKASHIC_REVISION
-LABEL org.opencontainers.image.source="https://github.com/kachofugetsu09/akashic-agent" \
+LABEL org.opencontainers.image.source=$AKASHIC_REPOSITORY \
       org.opencontainers.image.revision=$AKASHIC_REVISION
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates zsh curl \
     && rm -rf /var/lib/apt/lists/* \

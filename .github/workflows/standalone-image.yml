@@ -22,7 +22,6 @@ jobs:
       packages: write
     env:
       SOURCE_REVISION: ${{ github.sha }}
-      IMAGE: ghcr.io/${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,7 +33,10 @@ jobs:
         with:
           context: .
           file: docker/standalone/Dockerfile
-          build-args: AKASHIC_REVISION=${{ env.SOURCE_REVISION }}
+          # 仓库地址跟随 workflow 所在仓库，所以 fork 里也能构建自己的提交。
+          build-args: |
+            AKASHIC_REVISION=${{ env.SOURCE_REVISION }}
+            AKASHIC_REPOSITORY=${{ github.server_url }}/${{ github.repository }}
           load: true
           tags: akashic-standalone:candidate
           cache-from: type=gha,scope=standalone-${{ matrix.arch }}
@@ -59,6 +61,8 @@ jobs:
         env:
           ARCH: ${{ matrix.arch }}
         run: |
+          # GHCR 的仓库名必须小写，fork 的 owner 可能含大写字母。
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
           docker tag akashic-standalone:candidate "$IMAGE:$SOURCE_REVISION-$ARCH"
           docker push "$IMAGE:$SOURCE_REVISION-$ARCH"
   release:
@@ -69,7 +73,6 @@ jobs:
       contents: write
       packages: write
     env:
-      IMAGE: ghcr.io/${{ github.repository }}
       SOURCE_REVISION: ${{ github.sha }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -84,12 +87,14 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Combine the tested platform images
         run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
           docker buildx imagetools create --tag "$IMAGE:$SOURCE_REVISION" \
             "$IMAGE:$SOURCE_REVISION-amd64" "$IMAGE:$SOURCE_REVISION-arm64"
           docker buildx imagetools inspect "$IMAGE:$SOURCE_REVISION" \
             --format '{{json .Manifest}}' > "$RUNNER_TEMP/manifest.json"
       - name: Generate the independent release Compose
         run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
           mkdir "$RUNNER_TEMP/release"
           DIGEST=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["digest"])' "$RUNNER_TEMP/manifest.json")
           python3 scripts/build_standalone_compose.py --image "$IMAGE@$DIGEST" \
@@ -125,6 +130,7 @@ jobs:
         env:
           VERSION: ${{ github.ref_name }}
         run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
           IMAGE_REF=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["image"])' "$RUNNER_TEMP/release/release.json")
           docker buildx imagetools create --tag "$IMAGE:$VERSION" "$IMAGE_REF"
           cat > "$RUNNER_TEMP/release-notes.md" <<EOF
