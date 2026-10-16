@@ -21,7 +21,7 @@ api_version = 3
 name = "telegram_channel"
 version = "3.0.0"
 desc = "Telegram inbound and outbound v3 channel adapter"
-author = "Akashic"
+author = "Nexus"
 function_inject = (CHANNELS, CHANNEL_INPUT, CREDENTIALS, MESSAGE_CATALOG, SOURCE_INTERRUPT)
 Config = TelegramChannelConfig
 

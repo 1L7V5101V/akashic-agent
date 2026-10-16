@@ -140,7 +140,7 @@ def create_chat_app(
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
         yield
 
-    app = FastAPI(title="Akashic Chat API", lifespan=lifespan)
+    app = FastAPI(title="Nexus Chat API", lifespan=lifespan)
     app.state.workspace = workspace
     app.state.channel = channel
 

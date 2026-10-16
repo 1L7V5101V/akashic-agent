@@ -37,8 +37,8 @@ try {
   await context.route(`${fixture.origin}/link-shell`, (route) => route.fulfill({
     contentType: "text/html", body: `<!doctype html><meta charset="utf-8"><title>嵌入对话夹具</title>
       <style>body{margin:0;background:#f7f5ef}header{padding:16px}iframe{width:100%;height:850px;border:0}</style>
-      <header>Akashic · 对话（测试宿主）</header>
-      <iframe title="Akashic 对话" src="/chat?embedded=1&session=perf-session&keep=1"></iframe>`,
+      <header>Nexus · 对话（测试宿主）</header>
+      <iframe title="Nexus 对话" src="/chat?embedded=1&session=perf-session&keep=1"></iframe>`,
   }));
   await context.route(`${fixture.origin}/api/chat/sessions/*/messages*`, async (route) => {
     const response = await route.fetch();

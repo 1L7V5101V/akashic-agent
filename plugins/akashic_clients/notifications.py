@@ -57,7 +57,7 @@ def _item(message: Message, entry: SessionEntryPort) -> dict[str, object]:
         "message_id": message.message_id,
         "seq": message.seq,
         "recorded_at": message.recorded_at.isoformat(),
-        "title": _clip(title, 40) or "Akashic",
+        "title": _clip(title, 40) or "Nexus",
         "preview": _clip(_text_of(body.parts), 160),
     }
 

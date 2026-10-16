@@ -43,7 +43,7 @@ class Sender:
     async def send(self, key: str, address: str, message: Message) -> SendResult:
         # Delivery 只传入已提交的原 Message；这里核对它是否属于收件地址。
         if message.session_id != "akashic:" + address:
-            return SendResult(status="rejected", error="消息未保存在 Akashic 收件地址对应的 Session")
+            return SendResult(status="rejected", error="消息未保存在 Nexus 收件地址对应的 Session")
         return SendResult(status="delivered", provider_ids=(message.message_id,))
 
     async def query(self, key: str, address: str) -> SendResult | None:

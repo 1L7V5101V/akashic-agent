@@ -52,7 +52,7 @@ def _install_dashboard_access_log_filter() -> None:
 
 def create_dashboard_app(static_dir: Path) -> FastAPI:
     """只读取固定代码制品中的构建资产；缺少入口时明确返回不可用。"""
-    app = FastAPI(title="Akashic Dashboard API")
+    app = FastAPI(title="Nexus Dashboard API")
     # Vite 构建产物被 gitignore，新 clone 或 CI 环境可能没有该目录。
     # 挂载时不写代码目录，避免 app 创建依赖构建是否执行；
     # dashboard_index() 会在入口文件缺失时报告错误。

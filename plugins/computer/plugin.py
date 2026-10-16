@@ -144,7 +144,7 @@ api_version = 3
 name = "computer"
 version = "2.0.0"
 desc = "Persistent Linux desktop, browser, and visual control"
-author = "Akashic Core"
+author = "Nexus Core"
 inject = (UI,
     INSTALLED_ASSETS,
     MCP_SERVERS,

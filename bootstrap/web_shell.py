@@ -530,7 +530,7 @@ def _is_socket(path: Path) -> bool:
 def _runtime_unavailable(*, html: bool = False, code: str = "runtime_unavailable",
                          message: str = "Runtime 尚未就绪") -> Response:
     if html:
-        return HTMLResponse("<!doctype html><meta charset=utf-8><title>Akashic</title>"
+        return HTMLResponse("<!doctype html><meta charset=utf-8><title>Nexus Companion</title>"
                             f"<main><h1>{message}</h1><p>服务恢复后刷新此页面。</p></main>",
                             status_code=503, headers={"Retry-After": "1", "Cache-Control": "no-store"})
     return JSONResponse(status_code=503,

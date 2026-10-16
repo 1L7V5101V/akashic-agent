@@ -18,8 +18,8 @@ from plugins.ledger.contract import OWNER_STATE, OwnerStore
 api_version = 3
 name = "akashic_clients"
 version = "1.0.0"
-desc = "Web Akashic client channel"
-author = "Akashic"
+desc = "Web Nexus client channel"
+author = "Nexus"
 # Every dependency is a separate composition capability.  In particular,
 # there is no client-wide service bus for Core to assemble.
 inject = (CHANNELS, CHANNEL_INPUT, OWNER_STATE, *CLIENT_CAPABILITIES)

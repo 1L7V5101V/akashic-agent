@@ -121,7 +121,7 @@ async def mount(ctx: Context, model: type[BaseModel], function: FiberHandle) -> 
         await child.require(ONBOARDING).group(child, "proactive", "Wake 主动联系", Ability(
             pitch="在合适的时候主动找你",
             benefit="有具体理由时它会先开口，比如你提过的事有了进展。消息发到你选择的聊天渠道。",
-            preview=(PreviewLine("Akashic · 主动消息", "你周三说想等那本书降价，现在电子版打五折了。"),),
+            preview=(PreviewLine("Nexus · 主动消息", "你周三说想等那本书降价，现在电子版打五折了。"),),
         ))
         await child.require(ONBOARDING).register(child, Step("configure", "Wake 主动联系", "proactive", "wake-settings", settings.read, (function.fiber_id,)))
     await ctx.inject((ONBOARDING,), contribute, name="onboarding")

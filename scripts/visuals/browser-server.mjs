@@ -15,7 +15,7 @@ await build({ configFile: false, root: repo, plugins: [react()],
   build: { outDir: output, emptyOutDir: false, target: "es2022",
     rollupOptions: { input: resolve("scripts/visuals/browser-entry.tsx"), output: { entryFileNames: "app.js", assetFileNames: "[name][extname]" } } } });
 const catalog = await readFile(join(evidence, "catalog.json"));
-const html = `<!doctype html><html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Akashic · 可视化插件验收</title><link rel="stylesheet" href="/browser-entry.css"><style>nav{display:flex;flex-wrap:wrap;gap:8px;padding:12px;border-bottom:1px solid var(--ak-color-border-default)}nav button{min-height:44px;padding:8px;border:1px solid var(--ak-color-border-default)}main{max-width:760px;margin:20px auto;padding:0 8px}</style><div id="root"></div><script type="module" src="/app.js"></script></html>`;
+const html = `<!doctype html><html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nexus · 可视化插件验收</title><link rel="stylesheet" href="/browser-entry.css"><style>nav{display:flex;flex-wrap:wrap;gap:8px;padding:12px;border-bottom:1px solid var(--ak-color-border-default)}nav button{min-height:44px;padding:8px;border:1px solid var(--ak-color-border-default)}main{max-width:760px;margin:20px auto;padding:0 8px}</style><div id="root"></div><script type="module" src="/app.js"></script></html>`;
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, "http://127.0.0.1");
   try {

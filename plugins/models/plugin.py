@@ -36,7 +36,7 @@ api_version = 3
 name = "models"
 version = "1.0.0"
 desc = "Provider-neutral model connections, selection, and execution"
-author = "Akashic Core"
+author = "Nexus Core"
 inject = ()
 workspace_roots = ()
 workspace_files = ("model-registry.sqlite3",)
@@ -90,7 +90,7 @@ async def apply(ctx: Context) -> None:
     async def contribute(child: Context):
         await child.require(ONBOARDING).group(child, "models", "模型连接", Ability(
             pitch="连接一个对话模型",
-            benefit="Akashic 本身不带模型。选一个你已经有账号的服务，连上之后它就能回答你。",
+            benefit="Nexus 本身不带模型。选一个你已经有账号的服务，连上之后它就能回答你。",
             required=True,
         ))
         await child.require(ONBOARDING).register(child, Step("connect", "模型连接", "models", "models", status))

@@ -19,9 +19,9 @@ async def apply(ctx: Context) -> None:
     async def contribute(child: Context):
         await child.require(ONBOARDING).group(child, "channels", "聊天渠道", Ability(
             pitch="在聊天软件里找到它",
-            benefit="在手机上直接给 Akashic 发消息，不用打开网页；主动消息也会发到这里。",
+            benefit="在手机上直接给 Nexus 发消息，不用打开网页；主动消息也会发到这里。",
             preview=(PreviewLine("你 · Telegram", "帮我记一下，周五下午三点看牙。"),
-                     PreviewLine("Akashic", "记下了：周五 15:00 看牙。前一天晚上提醒你？")),
+                     PreviewLine("Nexus", "记下了：周五 15:00 看牙。前一天晚上提醒你？")),
         ))
     await ctx.inject((ONBOARDING,), contribute, name="onboarding")
 

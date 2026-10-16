@@ -141,7 +141,7 @@ function renderConversation(host, view, props) {
   root.className = "conversation-page";
   const frame = document.createElement("iframe");
   frame.className = "conversation-page-frame";
-  frame.title = "Akashic 对话";
+  frame.title = "Nexus 对话";
   frame.src = frameSource(takeRequestedSession());
   root.appendChild(frame);
 
