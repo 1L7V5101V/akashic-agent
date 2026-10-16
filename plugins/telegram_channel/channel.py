@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from .config import TelegramChannelConfig
-
 import asyncio
 import hashlib
 import logging
@@ -30,6 +28,7 @@ from plugins.channels.contract import (
     ControlResponseBodies,
 )
 
+from .config import TelegramChannelConfig, telegram_bot_urls
 from .reply_context import build_reply_inbound_text
 from .telegram_utils import TelegramOutboundLimiter, strip_chunk
 
@@ -40,6 +39,25 @@ _SEEN_LIMIT = 500
 _MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
 _MAX_ATTACHMENT_COUNT = 16
 _MAX_MESSAGE_UTF16 = 4090
+
+
+def _application(
+    api_base: str, token: str, timeout: float,
+) -> Application[Any, Any, Any, Any, Any, Any]:
+    """按 api_base 构造 PTB 应用：bot 调用与文件下载走同一条线路。"""
+
+    bot_url, file_url = telegram_bot_urls(api_base)
+    return (
+        Application.builder()
+        .token(token)
+        .base_url(bot_url)
+        .base_file_url(file_url)
+        .connect_timeout(timeout)
+        .read_timeout(timeout)
+        .write_timeout(timeout)
+        .pool_timeout(timeout)
+        .build()
+    )
 
 
 class _MessageDeduper:
@@ -87,12 +105,14 @@ class TelegramChannelAdapter:
         self, context: ChannelFactoryContext, *,
         create_client: Callable[[Mapping[str, CredentialRef]], Awaitable[ProviderClient]],
     ) -> None:
+        channel_config = TelegramChannelConfig.model_validate(context.config)
         self._context = context
         self._binding_token = context.binding_token
         self._ingress = context.ingress
         self._identity = context.identity
         self._create_client = create_client
-        self._token_ref = TelegramChannelConfig.model_validate(context.config).token
+        self._token_ref = channel_config.token
+        self._api_base = channel_config.api_base
         self._attachment_import = context.attachment_import
         self._attachment_read = context.attachment_read
         raw_allow_from = context.config.get("allow_from", ())
@@ -157,15 +177,7 @@ class TelegramChannelAdapter:
         try:
             self._provider_client = await self._create_client({"token": token_ref})
             token = self._provider_client.credential(token_ref)
-            self._app = (
-                Application.builder()
-                .token(token)
-                .connect_timeout(self._timeout)
-                .read_timeout(self._timeout)
-                .write_timeout(self._timeout)
-                .pool_timeout(self._timeout)
-                .build()
-            )
+            self._app = _application(self._api_base, token, self._timeout)
             self._app.add_handler(CommandHandler("stop", self._on_update))
             self._app.add_handler(MessageHandler(filters.COMMAND, self._on_update))
             self._app.add_handler(
@@ -236,7 +248,7 @@ class TelegramChannelAdapter:
                         chat_id,
                         kind="send",
                         label="send_photo",
-                        action=lambda: self._app.bot.send_photo(
+                        action=lambda data=data, ref=ref: self._app.bot.send_photo(
                             chat_id=chat_id,
                             photo=data,
                             filename=ref.filename or "image",
@@ -247,7 +259,7 @@ class TelegramChannelAdapter:
                         chat_id,
                         kind="send",
                         label="send_document",
-                        action=lambda: self._app.bot.send_document(
+                        action=lambda data=data, ref=ref: self._app.bot.send_document(
                             chat_id=chat_id,
                             document=data,
                             filename=ref.filename or ref.artifact_id,

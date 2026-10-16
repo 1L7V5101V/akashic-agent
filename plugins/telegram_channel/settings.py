@@ -5,16 +5,16 @@ from importlib import import_module
 from typing import Any, cast
 from pydantic import BaseModel
 from agent.plugin_composition import Context, ServiceKey, CREDENTIALS, CredentialRef
+from agent.plugin_composition.config_input import save_credential
 from agent.plugin_composition.context import FiberHandle
 from agent.plugin_composition.plugin_config import PLUGIN_CONFIG
 from agent.plugin_composition.runtime_catalog import RUNTIME_CATALOG
-from agent.plugin_composition.config_input import save_credential
 from plugins.ui.contract import UI
 from plugins.ui.contract import Configuration
 from plugins.onboarding.contract import ONBOARDING, Step
 
 SETTINGS = ServiceKey[Configuration]("telegram_channel.settings.v1")
-FIELDS = ('allow_from', 'timeout_seconds')
+FIELDS = ('api_base', 'allow_from', 'timeout_seconds')
 
 
 class Settings:
@@ -56,8 +56,8 @@ class Settings:
             config.update({key: value for key, value in values.items() if key != "token"})
             self.model.model_validate({**config, "enabled": False})
             if values["enabled"]:
-                from contextlib import AsyncExitStack
                 import aiohttp
+                from contextlib import AsyncExitStack
                 async with AsyncExitStack() as stack:
                     probe_token = token
                     if not probe_token and config.get("token") is not None:
@@ -70,11 +70,14 @@ class Settings:
                     import re
                     if re.fullmatch(r"[0-9]+:[A-Za-z0-9_-]+", probe_token) is None:
                         raise ValueError("Bot token 格式无效")
+                    api_base = str(config.get("api_base", "https://api.telegram.org")).rstrip("/")
                     try:
-                        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=8), trust_env=True) as client:
-                            async with client.get(f"{config.get('api_base', 'https://api.telegram.org')}/bot{probe_token}/getMe") as response:
-                                result = await response.json()
-                                status = response.status
+                        async with (
+                            aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=8), trust_env=True) as client,
+                            client.get(f"{api_base}/bot{probe_token}/getMe") as response,
+                        ):
+                            result = await response.json()
+                            status = response.status
                     except (aiohttp.ClientError, TimeoutError, ValueError):
                         raise ValueError("Telegram 连接验证失败，请检查网络与 token") from None
                     if not 200 <= status < 300 or not isinstance(result, dict) or result.get("ok") is not True:
