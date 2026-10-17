@@ -28,7 +28,7 @@ ARG AKASHIC_REPOSITORY=https://github.com/kachofugetsu09/akashic-agent
 ARG AKASHIC_REVISION
 LABEL org.opencontainers.image.source=$AKASHIC_REPOSITORY \
       org.opencontainers.image.revision=$AKASHIC_REVISION
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates zsh curl \
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates zsh curl ripgrep \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 1000 akashic && useradd --uid 1000 --gid 1000 --create-home akashic \
     && mkdir /data && chown akashic:akashic /data

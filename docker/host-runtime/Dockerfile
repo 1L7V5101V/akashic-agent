@@ -27,6 +27,7 @@ RUN printf '%s\n' \
         npm \
         python \
         python-pip \
+        ripgrep \
         util-linux \
         zsh \
     && pacman -Scc --noconfirm \
