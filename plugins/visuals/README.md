@@ -7,7 +7,7 @@
 
 插件依赖 `tools.v1` 和 `ledger.artifact_import.v1`；`ui.slots.v1` 仅用于可选展示。
 插件在产品进程内导入 Playwright，因此版本由产品 `requirements.txt` 与发行依赖锁拥有。
-正式发行镜像随默认组合启用插件，构建时安装匹配版本的 Chromium headless shell、系统库与中英文字体；插件不在运行中下载程序。原生运行由操作者准备浏览器：
+产品发行镜像（源码构建和发行附件里的 Compose）都在构建时安装匹配版本的 Chromium headless shell、系统库与中英文字体，并把浏览器目录设为只读；插件不在运行中下载程序。发行附件里的 Compose 用同目录的 `chromium-seccomp.json` 允许浏览器创建用户命名空间，因此三个文件不能拆开。原生运行由操作者准备浏览器：
 
 - 默认使用 Playwright 1.59.0 对应的 Chromium，可在产品环境中运行 `python -m playwright install --only-shell chromium`。
 - 已有受管理 Chromium 时，插件配置 `executable_path` 指向它的绝对路径。
@@ -21,7 +21,9 @@
 该策略来自 [Docker 上游默认策略](https://github.com/moby/profiles/blob/4b8214fc4971e06172938a1f1554ccff6647ee80/seccomp/default.json)，
 只保留本发行版 x86_64 与无 capabilities 的规则，并按 [Playwright 指导](https://playwright.dev/python/docs/docker)
 允许 clone、setns、unshare，以及无宿主权限时仅在用户命名空间内可用的 chroot。
-Workload Controller 仍用 Docker 默认策略。上游 Apache-2.0 许可保存在
+Workload Controller 仍用 Docker 默认策略。发行附件的 Compose 用 `security_opt` 注入同一份策略（随附件改名为
+`chromium-seccomp.json`，必须与 compose.yaml 同目录），其余仍用 Docker 默认策略；独立镜像以非 root 运行且 `/opt`
+不可写。上游 Apache-2.0 许可保存在
 `docker/host-runtime/chromium-seccomp.LICENSE`，本地策略的修改范围仅为上述过滤和沙箱调用。
 
 客户端通过插件的静态入口 `/visuals/frame.html` 打开图表，响应 CSP 强制 `sandbox allow-scripts`，

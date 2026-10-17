@@ -107,7 +107,8 @@ jobs:
               'platforms': ['linux/amd64', 'linux/arm64'],
           }, indent=2) + '\n')
           PY
-          (cd "$RUNNER_TEMP/release" && sha256sum compose.yaml release.json > SHA256SUMS)
+          (cd "$RUNNER_TEMP/release" && sha256sum compose.yaml release.json \
+            chromium-seccomp.json chromium-seccomp.LICENSE > SHA256SUMS)
       - name: Require anonymous pull and check the downloadable Compose
         run: |
           IMAGE_REF=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["image"])' "$RUNNER_TEMP/release/release.json")
@@ -134,15 +135,17 @@ jobs:
           IMAGE_REF=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["image"])' "$RUNNER_TEMP/release/release.json")
           docker buildx imagetools create --tag "$IMAGE:$VERSION" "$IMAGE_REF"
           cat > "$RUNNER_TEMP/release-notes.md" <<EOF
-          下载 Assets 中的 compose.yaml，放入专用目录后运行：
+          把 Assets 中的 compose.yaml、chromium-seccomp.json 和 chromium-seccomp.LICENSE 放入同一目录后运行：
 
           \`\`\`bash
           docker compose up -d --wait
           \`\`\`
 
           成功返回后打开 http://localhost:2236/#onboarding，完成初始配置。无需先配置模型 Key。
+          镜像内置 Chromium headless shell，浏览器与视觉插件开箱可用（策略由同目录的
+          chromium-seccomp.json 注入，路径不能移动）。
           镜像支持 AMD64、ARM64，Compose 固定到已验证镜像的 digest。
-          已通过两种架构的首次安装和保留数据卷重建，以及匿名镜像拉取验收。
+          已通过两种架构的首次安装、保留数据卷重建、容器内 Chromium 启动以及匿名镜像拉取验收。
           修复 #955 的默认插件源码读取权限，同时保留发行代码只读边界。
           配置、会话和插件选择写入 data 卷；不要使用 docker compose down -v。
 

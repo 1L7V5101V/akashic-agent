@@ -11,8 +11,11 @@ Akashic 是一个会主动找你的 AI 伙伴。它可以对话，也能根据�
 ```bash
 mkdir akashic && cd akashic
 curl -fsSLO https://github.com/kachofugetsu09/akashic-agent/releases/latest/download/compose.yaml
+curl -fsSLO https://github.com/kachofugetsu09/akashic-agent/releases/latest/download/chromium-seccomp.json
 docker compose up -d --wait
 ```
+
+两份文件必须放在同一目录：Compose 用相对路径读取浏览器沙箱策略，浏览器在镜像内已预装，不需要额外下载。
 
 首次启动会拉取镜像并安装默认功能，需要几分钟。命令返回后打开 <http://localhost:2236>，在“功能设置”→“初始配置”里连接模型，然后开始对话。
 
@@ -28,12 +31,13 @@ docker compose logs -f         # 查看日志
 
 - 配置、会话和插件都保存在 `data` 数据卷里。**不要运行 `docker compose down -v`，它会删除所有数据。**
 - 端口 2236 被占用时，在同一目录创建 `.env`，写入 `AKASHIC_PORT=2237`，再重新启动。
-- 更新：先停止并备份数据，再下载新版 `compose.yaml` 覆盖旧文件，运行启动命令。
+- 更新：先停止并备份数据，再下载新版 `compose.yaml` 和 `chromium-seccomp.json` 覆盖旧文件，运行启动命令。
 
 ```bash
 docker compose stop
 docker run --rm -v akashic_data:/data -v "$PWD":/backup alpine tar czf /backup/akashic-data.tgz -C /data .
 curl -fsSLO https://github.com/kachofugetsu09/akashic-agent/releases/latest/download/compose.yaml
+curl -fsSLO https://github.com/kachofugetsu09/akashic-agent/releases/latest/download/chromium-seccomp.json
 docker compose up -d --wait
 ```
 

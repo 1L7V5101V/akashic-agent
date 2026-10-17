@@ -28,7 +28,13 @@ ARG AKASHIC_REPOSITORY=https://github.com/kachofugetsu09/akashic-agent
 ARG AKASHIC_REVISION
 LABEL org.opencontainers.image.source=$AKASHIC_REPOSITORY \
       org.opencontainers.image.revision=$AKASHIC_REVISION
+# Chromium 运行库与中英文字体：与 playwright 锁版本的 Debian 12 依赖表对应。
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates zsh curl ripgrep \
+        libasound2 libatk-bridge2.0-0 libatk1.0-0 libatspi2.0-0 libcairo2 libcups2 \
+        libdbus-1-3 libdrm2 libfontconfig1 libfreetype6 libgbm1 libglib2.0-0 libnspr4 \
+        libnss3 libpango-1.0-0 libx11-6 libxcb1 libxcomposite1 libxdamage1 libxext6 \
+        libxfixes3 libxkbcommon0 libxrandr2 \
+        fonts-liberation fonts-noto-color-emoji fonts-wqy-zenhei \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 1000 akashic && useradd --uid 1000 --gid 1000 --create-home akashic \
     && mkdir /data && chown akashic:akashic /data
@@ -37,7 +43,12 @@ COPY --from=build /opt/distribution /opt/distribution
 COPY --from=build /opt/core /opt/core
 # 插件源码保留临时目录的 700 权限；运行用户需要读取，但不应改写镜像制品。
 RUN chmod -R a=rX /opt/distribution
-ENV PATH=/opt/venv/bin:$PATH AKASHIC_EXECUTION_MODE=local PYTHONUNBUFFERED=1 AKASHIC_PLUGIN_DISTRIBUTION=/opt/distribution
+# 浏览器在构建期安装并设为只读：运行容器不联网下载，也不需要可写的缓存目录。
+ENV PATH=/opt/venv/bin:$PATH \
+    PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
+    AKASHIC_EXECUTION_MODE=local PYTHONUNBUFFERED=1 AKASHIC_PLUGIN_DISTRIBUTION=/opt/distribution
+RUN /opt/venv/bin/python -m playwright install --only-shell chromium \
+    && chmod -R a=rX /opt/ms-playwright
 USER akashic
 WORKDIR /opt/core
 EXPOSE 2236

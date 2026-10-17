@@ -15,14 +15,29 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 SNAPSHOT = """
-import hashlib, json, os, subprocess
+import asyncio, hashlib, json, os, subprocess
 from pathlib import Path
 
 assert os.getuid() != 0, '运行进程必须使用普通用户'
-for directory in ('/opt/venv', '/opt/core', '/opt/distribution'):
+for directory in ('/opt/venv', '/opt/core', '/opt/distribution', '/opt/ms-playwright'):
     root = Path(directory)
     for path in (root, *root.rglob('*')):
         assert not os.access(path, os.W_OK), path
+
+async def launch_browser() -> str:
+    # 按可视化插件的同一合同启动内置浏览器。
+    from playwright.async_api import async_playwright
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(chromium_sandbox=True, timeout=30_000)
+        try:
+            page = await browser.new_page()
+            await page.set_content('<p id="probe">ok</p>')
+            assert await page.inner_text('#probe') == 'ok', '浏览器没有渲染页面'
+            return browser.version
+        finally:
+            await browser.close()
+
+browser = asyncio.run(launch_browser())
 distribution = Path('/opt/distribution')
 report = json.loads((distribution / 'distribution.json').read_text())
 for plugin in report['plugins']:
@@ -41,6 +56,7 @@ paths = ('startup.json', 'config.toml',
          'workspace/runtime/distribution-install.json',
          'workspace/runtime/plugin-stable.json')
 print(json.dumps({'uid': os.getuid(), 'source_commit': report['source_commit'],
+                  'browser': browser,
                   'bundle_patch': patch.read_text() if patch.exists() else None,
                   'files': {name: hashlib.sha256((state / name).read_bytes()).hexdigest()
                             for name in paths}}))
@@ -68,11 +84,11 @@ def check_web(origin: str) -> list[str]:
 def main() -> None:
     """只管理本次创建的 project，保留日志后删除其一次性数据卷。"""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--image', required=True, help='已经构建的本地镜像')
-    parser.add_argument('--revision', required=True, help='镜像应包含的完整源码 commit')
-    parser.add_argument('--compose', type=Path, default=ROOT / 'compose.yaml',
-                        help='仓库构建配置或发行附件')
-    parser.add_argument('--output', type=Path, help='尚不存在的验收输出目录')
+    _ = parser.add_argument('--image', required=True, help='已经构建的本地镜像')
+    _ = parser.add_argument('--revision', required=True, help='镜像应包含的完整源码 commit')
+    _ = parser.add_argument('--compose', type=Path, default=ROOT / 'compose.yaml',
+                            help='仓库构建配置或发行附件')
+    _ = parser.add_argument('--output', type=Path, help='尚不存在的验收输出目录')
     args = parser.parse_args()
     if args.output is None:
         output = Path(tempfile.mkdtemp(prefix='akashic-compose-smoke-'))
@@ -81,7 +97,7 @@ def main() -> None:
         output.mkdir(parents=True, exist_ok=False)
     project = 'akashic-smoke-' + uuid.uuid4().hex
     override = output / 'compose.json'
-    override.write_text(json.dumps({'services': {'akashic': {'image': args.image}}}) + '\n')
+    _ = override.write_text(json.dumps({'services': {'akashic': {'image': args.image}}}) + '\n')
     environment = dict(os.environ, AKASHIC_PORT='0', AKASHIC_REVISION=args.revision)
     command = ['docker', 'compose', '-p', project, '-f', str(args.compose.resolve()),
                '-f', str(override)]
@@ -96,42 +112,42 @@ def main() -> None:
     startup_logs: set[str] = set()
     try:
         # 1. 从空卷启动，通过公开的 Compose healthcheck 等待就绪。
-        compose('up', '-d', '--no-build', '--pull', 'never', '--wait', '--wait-timeout', '600')
+        _ = compose('up', '-d', '--no-build', '--pull', 'never', '--wait', '--wait-timeout', '600')
         address = compose('port', 'akashic', '2236', capture=True)
         origin = 'http://' + address
         modules = check_web(origin)
         before = json.loads(compose('exec', '-T', 'akashic', 'python', '-c', SNAPSHOT, capture=True))
         assert before['source_commit'] == args.revision, before['source_commit']
-        print('首次启动通过：普通用户、只读制品、真实网页和插件模块', flush=True)
+        print('首次启动通过：普通用户、只读制品、内置浏览器、真实网页和插件模块', flush=True)
         cold_logs = compose('logs', '--no-color', capture=True)
-        (output / 'cold-compose.log').write_text(cold_logs + '\n')
+        _ = (output / 'cold-compose.log').write_text(cold_logs + '\n')
         startup_logs.update(re.findall(r'/data/(startup-[0-9a-f]+\.log)', cold_logs))
 
         # 2. 重新创建容器而保留同一数据卷，核对持久安装与原选择。
-        compose('down')
-        compose('up', '-d', '--no-build', '--pull', 'never', '--wait', '--wait-timeout', '600')
+        _ = compose('down')
+        _ = compose('up', '-d', '--no-build', '--pull', 'never', '--wait', '--wait-timeout', '600')
         origin = 'http://' + compose('port', 'akashic', '2236', capture=True)
         assert check_web(origin) == modules, '重启后的 Web 插件集合改变'
         after = json.loads(compose('exec', '-T', 'akashic', 'python', '-c', SNAPSHOT, capture=True))
         assert after == before, '重启改写了安装记录、配置或插件选择'
         report = {'project': project, 'image': args.image, **after, 'web_modules': modules,
                   'cold_start': 'passed', 'volume_restart': 'passed'}
-        (output / 'result.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
+        _ = (output / 'result.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
         print('重建容器通过：配置、安装记录和插件选择保留', flush=True)
     finally:
         # 3. 日志与失败详情留在宿主；只删除本次 UUID project 的临时卷。
         try:
             logs = compose('logs', '--no-color', capture=True)
-            (output / 'compose.log').write_text(logs + '\n')
+            _ = (output / 'compose.log').write_text(logs + '\n')
             startup_logs.update(re.findall(r'/data/(startup-[0-9a-f]+\.log)', logs))
             container = compose('ps', '-a', '-q', capture=True)
             if container:
                 # docker cp 也能读取已经退出的容器；不把配置或凭据写入验收产物。
                 for name in sorted(startup_logs):
-                    subprocess.run(['docker', 'cp', container + ':/data/' + name, str(output / name)],
-                                   check=True)
+                    _ = subprocess.run(['docker', 'cp', container + ':/data/' + name, str(output / name)],
+                                       check=True)
         finally:
-            compose('down', '--volumes', '--remove-orphans')
+            _ = compose('down', '--volumes', '--remove-orphans')
 
 
 if __name__ == '__main__':

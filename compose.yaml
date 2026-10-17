@@ -11,6 +11,9 @@ services:
     volumes:
       - data:/data
     init: true
+    # 浏览器沙箱需要用户命名空间，其余拦截仍保留。
+    security_opt:
+      - seccomp:./docker/host-runtime/chromium-seccomp.json
     stop_grace_period: 60s
     restart: "no"
     healthcheck:
